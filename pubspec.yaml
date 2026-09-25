@@ -1,0 +1,81 @@
+name: sefer
+description: "A private, offline-first reader for learning languages."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.6
+  file_picker: ^13.1.0
+  share_plus: ^13.3.0
+  phosphor_flutter: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-400.ttf
+          weight: 400
+        - asset: assets/fonts/Nunito-500.ttf
+          weight: 500
+        - asset: assets/fonts/Nunito-600.ttf
+          weight: 600
+        - asset: assets/fonts/Nunito-700.ttf
+          weight: 700
+        - asset: assets/fonts/Nunito-800.ttf
+          weight: 800
+        - asset: assets/fonts/Nunito-900.ttf
+          weight: 900
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata-400.ttf
+          weight: 400
+        - asset: assets/fonts/Literata-700.ttf
+          weight: 700
+    - family: NotoSerif
+      fonts:
+        - asset: assets/fonts/NotoSerif-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSerif-700.ttf
+          weight: 700
+    - family: Atkinson
+      fonts:
+        - asset: assets/fonts/Atkinson-400.ttf
+          weight: 400
+        - asset: assets/fonts/Atkinson-700.ttf
+          weight: 700
+    - family: NotoSansHebrew
+      fonts:
+        - asset: assets/fonts/NotoSansHebrew-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansHebrew-700.ttf
+          weight: 700
+    - family: FrankRuhl
+      fonts:
+        - asset: assets/fonts/FrankRuhl-400.ttf
+          weight: 400
+        - asset: assets/fonts/FrankRuhl-700.ttf
+          weight: 700
+    - family: NotoNaskhArabic
+      fonts:
+        - asset: assets/fonts/NotoNaskhArabic-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoNaskhArabic-700.ttf
+          weight: 700
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-400.ttf
+          weight: 400
+        - asset: assets/fonts/Amiri-700.ttf
+          weight: 700
