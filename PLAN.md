@@ -61,7 +61,7 @@ terminal punctuation for every script (`. ! ? … 。 ！ ？ ؟ ۔ ।` and so 
 
 - **Flutter, Android only** at first. Dependencies are kept small:
   `path_provider`, `file_picker` (import, export and cover images),
-  `share_plus` (send to Anki and share backups) and `phosphor_flutter`
+  `share_plus` (send to Anki and share backups) and `phosphoricons_flutter`
   (icons). None of them needs network access.
 - **State**: one `AppState` (`ChangeNotifier`) exposed through an
   `InheritedNotifier`. No state-management package.
