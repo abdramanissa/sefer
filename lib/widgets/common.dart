@@ -128,14 +128,17 @@ class ThinProgress extends StatelessWidget {
       borderRadius: BorderRadius.circular(height),
       child: SizedBox(
         height: height,
-        child: Stack(
-          children: [
-            Positioned.fill(child: ColoredBox(color: c.bgRaised2)),
-            FractionallySizedBox(
+        width: double.infinity,
+        child: ColoredBox(
+          color: c.bgRaised2,
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FractionallySizedBox(
               widthFactor: value.clamp(0.0, 1.0),
+              heightFactor: 1,
               child: ColoredBox(color: color ?? c.accent),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -160,6 +163,7 @@ class StatValue extends StatelessWidget {
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
+          textDirection: TextDirection.ltr,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [

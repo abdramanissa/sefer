@@ -210,7 +210,7 @@ void main() {
     test('word status ignores nikkud and case', () {
       app.setWord('he', 'שָׁלוֹם', status: 2, meaning: 'peace');
       expect(app.statusOf('he', 'שלום'), 2);
-      expect(app.entry('he', 'שלום')!.word, 'שלום');
+      expect(app.entry('he', 'שלום')!.word, 'שָׁלוֹם'); // spelling kept, lookup ignores marks
       app.setWord('el', 'Καλημέρα', status: WordStatus.known);
       expect(app.statusOf('el', 'καλημέρα'), WordStatus.known);
       expect(app.today.known, 1);

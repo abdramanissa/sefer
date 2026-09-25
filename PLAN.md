@@ -109,6 +109,7 @@ test/         text engine, importer, stats/streaks, Anki export, widget smoke
 
 ## Not in scope yet
 
-Audio, iOS, cloud sync, dictionary lookups (they need the network), and UI
-translations. All UI strings live in one file (`lib/l10n/strings.dart`), so
-they are ready for translation.
+Audio, iOS, cloud sync, dictionary lookups (they need the network), word
+segmentation for Chinese, Japanese and Thai (Han characters are single words;
+kana and Thai runs stay whole), and translating the interface itself (it is
+English; the texts you read can be in any language).

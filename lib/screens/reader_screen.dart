@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -191,10 +192,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
       return Center(
         key: key,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: set.maxWidth),
+          constraints: BoxConstraints.tightFor(width: min(set.maxWidth, MediaQuery.sizeOf(context).width)),
           child: Padding(
             padding: EdgeInsets.fromLTRB(set.sidePadding, 0, set.sidePadding, set.paragraphSpacing),
             child: _ParagraphView(
+              dir: dir,
               story: s,
               index: i,
               selected: _selected,
@@ -213,7 +215,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     }
 
     return Directionality(
-      textDirection: dir,
+      // The interface stays in the app's direction; only the text itself
+      // follows the story's language (see _ParagraphView and _Header).
+      textDirection: Directionality.of(context),
       child: ColoredBox(
         color: c.bg,
         child: Stack(
@@ -228,7 +232,7 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                     controller: _scroll,
                     center: _centerKey,
                     slivers: [
-                      SliverToBoxAdapter(child: _Header(story: s, topPad: top + _barHeight + 18)),
+                      SliverToBoxAdapter(child: _Header(story: s, dir: dir, topPad: top + _barHeight + 18)),
                       SliverList(
                         delegate: SliverChildBuilderDelegate((_, i) => para(_anchor - 1 - i), childCount: _anchor),
                       ),
@@ -351,8 +355,9 @@ Future<void> showReaderSettings(BuildContext context, Story story) {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.story, required this.topPad});
+  const _Header({required this.story, required this.dir, required this.topPad});
   final Story story;
+  final TextDirection dir;
   final double topPad;
 
   @override
@@ -364,11 +369,11 @@ class _Header extends StatelessWidget {
     final font = readerFontById(set.readerFont);
     return Center(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: set.maxWidth),
+        constraints: BoxConstraints.tightFor(width: min(set.maxWidth, MediaQuery.sizeOf(context).width)),
         child: Padding(
           padding: EdgeInsets.fromLTRB(set.sidePadding, topPad, set.sidePadding, set.paragraphSpacing + 10),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: dir == TextDirection.rtl ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
               Wrap(
                 spacing: 8,
@@ -385,6 +390,7 @@ class _Header extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 set.showMarks ? story.title : stripVowelMarks(story.title),
+                textDirection: dir,
                 style: TextStyle(
                   fontFamily: font.family,
                   fontFamilyFallback: readerFallback,
@@ -420,7 +426,7 @@ class _Footer extends StatelessWidget {
     final done = story.finishedAt != null;
     return Center(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: set.maxWidth),
+        constraints: BoxConstraints.tightFor(width: min(set.maxWidth, MediaQuery.sizeOf(context).width)),
         child: Padding(
           padding: EdgeInsets.fromLTRB(set.sidePadding, 12, set.sidePadding, 40 + bottom),
           child: SoftCard(
@@ -488,6 +494,7 @@ typedef _WordTap = void Function(String word, Sentence sentence, String key);
 
 class _ParagraphView extends StatelessWidget {
   const _ParagraphView({
+    required this.dir,
     required this.story,
     required this.index,
     required this.selected,
@@ -497,6 +504,7 @@ class _ParagraphView extends StatelessWidget {
     this.onToggleTranslations,
   });
 
+  final TextDirection dir;
   final Story story;
   final int index;
   final String? selected;
@@ -577,7 +585,9 @@ class _ParagraphView extends StatelessWidget {
     }
 
     final hasTranslations = paragraph.sentences.any((x) => x.translation != null);
-    return Column(
+    return Directionality(
+      textDirection: dir,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text.rich(
@@ -627,6 +637,7 @@ class _ParagraphView extends StatelessWidget {
               : const SizedBox(width: double.infinity),
         ),
       ],
+      ),
     );
   }
 }

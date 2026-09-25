@@ -186,7 +186,8 @@ class _RollingTextState extends State<RollingText> with SingleTickerProviderStat
             if (b == ' ' && t == 1) continue;
             cells.add(isDigit ? SizedBox(width: dw, child: Center(child: cell)) : cell);
           }
-          return Row(mainAxisSize: MainAxisSize.min, children: cells);
+          // Digits read left to right even inside right-to-left text.
+          return Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: cells);
         },
       ),
     );

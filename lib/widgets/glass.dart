@@ -29,7 +29,7 @@ class GlassSurface extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: r,
         boxShadow: shadow
-            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 32, offset: const Offset(0, 12))]
+            ? [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 32, offset: const Offset(0, 12))]
             : null,
       ),
       child: ClipRRect(

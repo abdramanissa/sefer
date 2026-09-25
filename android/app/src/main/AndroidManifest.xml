@@ -1,7 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Sefer is offline by design: make sure no library merges network
+         access into the release build. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <application
-        android:label="sefer"
+        android:label="Sefer"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

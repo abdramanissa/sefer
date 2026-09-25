@@ -92,7 +92,8 @@ class ActivityHeatmap extends StatefulWidget {
 }
 
 class _ActivityHeatmapState extends State<ActivityHeatmap> {
-  final _scroll = ScrollController();
+  // Always opens on today, so there is no offset worth restoring.
+  final _scroll = ScrollController(keepScrollOffset: false);
 
   @override
   void initState() {

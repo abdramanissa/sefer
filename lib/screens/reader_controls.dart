@@ -28,6 +28,7 @@ class ReaderControls extends StatelessWidget {
         SizedBox(
           height: 78,
           child: ListView(
+            key: const PageStorageKey('reader-fonts'),
             scrollDirection: Axis.horizontal,
             children: [
               for (final f in readerFonts)

@@ -115,6 +115,7 @@ class _WordsScreenState extends State<WordsScreen> {
           SizedBox(
             height: 36,
             child: ListView(
+              key: const PageStorageKey('words-filters'),
               scrollDirection: Axis.horizontal,
               children: [
                 Pill(

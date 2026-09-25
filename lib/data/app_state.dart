@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
-import '../text/normalize.dart';
 import '../text/tokenizer.dart';
 import '../theme/app_colors.dart';
 import 'exporter.dart';
@@ -412,7 +411,7 @@ class AppState extends ChangeNotifier {
             if (!_isWordish(w)) continue;
             vocab[id] = VocabEntry(
               language: s.language,
-              word: stripVowelMarks(w),
+              word: w,
               status: WordStatus.known,
               storyId: s.id,
             );
@@ -487,7 +486,7 @@ class AppState extends ChangeNotifier {
       return null;
     }
     final isNew = e == null;
-    e ??= VocabEntry(language: language, word: stripVowelMarks(word), storyId: storyId);
+    e ??= VocabEntry(language: language, word: word, storyId: storyId);
     if (status != null) e.status = status;
     if (meaning != null) e.meaning = meaning;
     if (transliteration != null) e.transliteration = transliteration;

@@ -464,6 +464,7 @@ class _FormatGuide extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(14)),
                 child: SingleChildScrollView(
+                  key: const PageStorageKey('add-json-example'),
                   scrollDirection: Axis.horizontal,
                   child: Text(
                     _example,

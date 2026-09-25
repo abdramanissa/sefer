@@ -107,6 +107,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           SizedBox(
             height: 36,
             child: ListView(
+              key: const PageStorageKey('library-filters'),
               scrollDirection: Axis.horizontal,
               children: [
                 Pill(
@@ -143,6 +144,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             SizedBox(
               height: 36,
               child: ListView(
+                key: const PageStorageKey('library-shelves'),
                 scrollDirection: Axis.horizontal,
                 children: [
                   for (final sh in app.shelves) ...[
