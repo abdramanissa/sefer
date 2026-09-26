@@ -10,7 +10,10 @@ import '../data/io.dart';
 import '../data/languages.dart';
 import '../data/models.dart';
 import '../theme/app_colors.dart';
+import '../data/stats.dart';
 import '../theme/app_theme.dart';
+import '../theme/feel.dart';
+import '../widgets/covers.dart';
 import '../widgets/common.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
@@ -20,59 +23,160 @@ import 'story_actions.dart';
 import 'story_screen.dart';
 import 'words_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+/// The Profile tab: who you are, what you study, and every setting.
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final app = context.app;
     final s = app.settings;
-    final isTab = app.visibleTabs.contains('settings');
+    final c = context.sc;
+    final feel = context.feel;
+    final isTab = app.visibleTabs.contains('profile');
+    final langs = app.knownLanguages;
+    final backupDue = s.backupReminderDays > 0 &&
+        app.stories.isNotEmpty &&
+        (s.lastBackupAt == null || DateTime.now().difference(s.lastBackupAt!).inDays >= s.backupReminderDays);
+    final name = s.profileName.trim().isEmpty ? 'Reader' : s.profileName.trim();
     return PageScroll(
-      id: 'settings',
+      id: 'profile',
       children: [
-        if (isTab)
-          const TabHeader(kicker: 'Make it yours', title: 'Settings')
-        else
-          ScreenHeader(title: 'Settings', onBack: app.back),
-        const SizedBox(height: 24),
+        if (!isTab) ...[ScreenHeader(title: 'Profile', onBack: app.back), SizedBox(height: feel.gap)],
+        // Who you are.
+        Row(
+          children: [
+            Pressable(
+              scale: 0.94,
+              onTap: () => _editProfile(context),
+              child: _Avatar(name: name, emoji: s.profileEmoji, hue: s.profileHue, size: 64),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(feel.titleSize - 2, weight: FontWeight.w800, color: c.text)),
+                  const SizedBox(height: 4),
+                  Text(
+                    langs.isEmpty ? 'Add the languages you study' : 'Studying ${langs.map(languageName).join(', ')}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            RoundBtn(icon: PhosphorIconsRegular.pencilSimple, label: 'Edit profile', onTap: () => _editProfile(context)),
+          ],
+        ),
+        SizedBox(height: feel.gap + 4),
+        Row(
+          children: [
+            Expanded(child: _Mini(value: '${app.dailyStreak}', label: 'Day streak', icon: PhosphorIconsFill.flame, color: c.accent, onTap: () => app.go('stats'))),
+            SizedBox(width: feel.gap * 0.7),
+            Expanded(child: _Mini(value: '${app.knownCount(app.scoped ? app.activeLanguage : null)}', label: 'Known words', icon: PhosphorIconsFill.checkCircle, color: c.sage, onTap: () => app.go('words'))),
+            SizedBox(width: feel.gap * 0.7),
+            Expanded(child: _Mini(value: '${app.visibleStories.length}', label: 'Stories', icon: PhosphorIconsFill.books, color: c.brass, onTap: () => app.go('library'))),
+          ],
+        ),
+        if (backupDue) ...[
+          SizedBox(height: feel.gap),
+          SoftCard(
+            color: c.warn.withValues(alpha: 0.12),
+            borderColor: Colors.transparent,
+            onTap: () => _backup(context),
+            child: Row(
+              children: [
+                Icon(PhosphorIconsFill.cloudArrowDown, color: c.warn, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    s.lastBackupAt == null
+                        ? 'You haven\'t made a backup yet. Everything lives only on this phone.'
+                        : 'Last backup ${DateTime.now().difference(s.lastBackupAt!).inDays} days ago.',
+                    style: AppTheme.f(13, weight: FontWeight.w600, color: c.text, height: 1.35),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('Back up', style: AppTheme.f(13, weight: FontWeight.w800, color: c.warn)),
+              ],
+            ),
+          ),
+        ],
+        SizedBox(height: feel.section),
+        // Languages.
+        const Kicker('Languages'),
+        const SizedBox(height: 10),
+        ToolGroup(
+          children: [
+            for (final l in langs)
+              ToolRow(
+                icon: l == app.activeLanguage ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                label: languageName(l),
+                detail: [
+                  if (l == app.activeLanguage) 'Studying now',
+                  '${app.knownCount(l)} known',
+                  if (s.fontByLanguage[l] != null) readerFontById(s.fontByLanguage[l]!).label,
+                ].join(' · '),
+                onTap: () => _languageSheet(context, l),
+              ),
+            ToolRow(
+              icon: PhosphorIconsRegular.plus,
+              label: 'Add a language',
+              onTap: () async {
+                final l = await pickLanguage(context, title: 'Language you study');
+                if (l != null) app.updateSettings((x) => x.learning.contains(l) ? null : x.learning.add(l));
+              },
+            ),
+            ToolRow(
+              icon: PhosphorIconsRegular.house,
+              label: 'Your own language',
+              value: languageName(s.nativeLanguage),
+              onTap: () async {
+                final l = await pickLanguage(context, title: 'Your language', selected: s.nativeLanguage);
+                if (l != null) {
+                  app.updateSettings((x) {
+                    x.nativeLanguage = l;
+                    x.defaultTranslationLang = l;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+        SizedBox(height: feel.gap),
+        ToolGroup(
+          children: [
+            ToolRow(
+              icon: PhosphorIconsRegular.eyeSlash,
+              label: 'Show only the language I\'m studying now',
+              detail: 'Other languages stay out of sight in the library, words and stats. Handy when someone looks over your shoulder.',
+              trailing: TinySwitch(
+                value: s.languageScope == 'active',
+                onChanged: (v) => app.updateSettings((x) => x.languageScope = v ? 'active' : 'all'),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: feel.section),
         const Kicker('Look and feel'),
         const SizedBox(height: 10),
         ToolGroup(
           children: [
-            ToolRow(
-              icon: PhosphorIconsRegular.palette,
-              label: 'Theme',
-              value: _themeName(app),
-              onTap: () => app.go('settings:appearance'),
-            ),
+            ToolRow(icon: PhosphorIconsRegular.palette, label: 'Appearance', value: '${_themeName(app)} · ${Feel.byId(s.feel).label}', onTap: () => app.go('settings:appearance')),
             ToolRow(
               icon: PhosphorIconsRegular.textAa,
               label: 'Reader',
               value: '${readerFontById(s.readerFont).label} · ${s.fontSize.round()}',
               onTap: () => app.go('settings:reader'),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.layout,
-              label: 'Layout',
-              value: s.tabs.map((t) => tabMeta[t]!.label).join(', '),
-              onTap: () => app.go('settings:layout'),
-            ),
-            ToolRow(
-              icon: PhosphorIconsRegular.sparkle,
-              label: 'Transitions',
-              value: _transitionName(s.transition),
-              onTap: () => app.go('settings:motion'),
-            ),
-            ToolRow(
-              icon: PhosphorIconsRegular.squaresFour,
-              label: 'Activity chart',
-              value: '${s.heatWeeks} weeks',
-              onTap: () => showHeatmapSettings(context),
-            ),
+            ToolRow(icon: PhosphorIconsRegular.layout, label: 'Navigation', value: '${s.tabs.length} tabs', onTap: () => app.go('settings:layout')),
+            ToolRow(icon: PhosphorIconsRegular.sparkle, label: 'Transitions', value: _transitionName(s.transition), onTap: () => app.go('settings:motion')),
+            ToolRow(icon: PhosphorIconsRegular.squaresFour, label: 'Activity chart', value: '${s.heatWeeks} weeks', onTap: () => showHeatmapSettings(context)),
           ],
         ),
-        const SizedBox(height: 26),
+        SizedBox(height: feel.section),
         const Kicker('Learning'),
         const SizedBox(height: 10),
         ToolGroup(
@@ -101,18 +205,9 @@ class SettingsScreen extends StatelessWidget {
               detail: 'Words you never tapped are ones you understood',
               trailing: TinySwitch(value: s.autoKnownOnFinish, onChanged: (v) => app.updateSettings((x) => x.autoKnownOnFinish = v)),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.chatsCircle,
-              label: 'Translations usually in',
-              value: languageName(s.defaultTranslationLang),
-              onTap: () async {
-                final l = await pickLanguage(context, title: 'Your language', selected: s.defaultTranslationLang);
-                if (l != null) app.updateSettings((x) => x.defaultTranslationLang = l);
-              },
-            ),
           ],
         ),
-        const SizedBox(height: 26),
+        SizedBox(height: feel.section),
         const Kicker('Your data'),
         const SizedBox(height: 10),
         ToolGroup(
@@ -120,13 +215,23 @@ class SettingsScreen extends StatelessWidget {
             ToolRow(
               icon: PhosphorIconsRegular.cloudArrowDown,
               label: 'Back up everything',
-              detail: 'Stories, words, stats, settings and covers in one file',
+              detail: s.lastBackupAt == null ? 'Never backed up' : 'Last: ${_ago(s.lastBackupAt!)}',
               onTap: () => _backup(context),
             ),
+            ToolRow(icon: PhosphorIconsRegular.cloudArrowUp, label: 'Restore a backup', onTap: () => _restore(context)),
             ToolRow(
-              icon: PhosphorIconsRegular.cloudArrowUp,
-              label: 'Restore a backup',
-              onTap: () => _restore(context),
+              icon: PhosphorIconsRegular.bellSimple,
+              label: 'Remind me to back up',
+              value: s.backupReminderDays == 0 ? 'Never' : 'Every ${s.backupReminderDays} days',
+              onTap: () async {
+                final v = await pickOption<int>(context, title: 'Backup reminder', selected: s.backupReminderDays, items: const [
+                  OptionItem(7, 'Every week'),
+                  OptionItem(14, 'Every two weeks'),
+                  OptionItem(30, 'Every month'),
+                  OptionItem(0, 'Never'),
+                ]);
+                if (v != null) app.updateSettings((x) => x.backupReminderDays = v);
+              },
             ),
             ToolRow(
               icon: PhosphorIconsRegular.export,
@@ -134,20 +239,11 @@ class SettingsScreen extends StatelessWidget {
               detail: 'In the import format',
               onTap: app.stories.isEmpty ? null : () => exportStoriesFlow(context, app.stories),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.cards,
-              label: 'Export words to Anki',
-              onTap: () => showAnkiExport(context),
-            ),
-            ToolRow(
-              icon: PhosphorIconsRegular.trash,
-              label: 'Erase everything',
-              danger: true,
-              onTap: () => _wipe(context),
-            ),
+            ToolRow(icon: PhosphorIconsRegular.cards, label: 'Export words to Anki', onTap: () => showAnkiExport(context)),
+            ToolRow(icon: PhosphorIconsRegular.trash, label: 'Erase everything', danger: true, onTap: () => _wipe(context)),
           ],
         ),
-        const SizedBox(height: 26),
+        SizedBox(height: feel.section),
         const Kicker('App'),
         const SizedBox(height: 10),
         ToolGroup(
@@ -163,15 +259,16 @@ class SettingsScreen extends StatelessWidget {
               detail: 'Also follows your system setting',
               trailing: TinySwitch(value: s.reduceMotion, onChanged: (v) => app.updateSettings((x) => x.reduceMotion = v)),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.shieldCheck,
-              label: 'Privacy and about',
-              onTap: () => app.go('settings:about'),
-            ),
+            ToolRow(icon: PhosphorIconsRegular.shieldCheck, label: 'Privacy and about', onTap: () => app.go('settings:about')),
           ],
         ),
       ],
     );
+  }
+
+  static String _ago(DateTime d) {
+    final days = DateTime.now().difference(d).inDays;
+    return days == 0 ? 'today' : (days == 1 ? 'yesterday' : '$days days ago');
   }
 
   static String _themeName(AppState app) => switch (app.settings.themeMode) {
@@ -188,6 +285,167 @@ class SettingsScreen extends StatelessWidget {
     'none' => 'None',
     _ => 'Blur',
   };
+
+  Future<void> _editProfile(BuildContext context) async {
+    final app = context.appRead;
+    final s = app.settings;
+    final nameCtl = TextEditingController(text: s.profileName);
+    const emojis = ['', '📚', '🦉', '🌿', '☕', '🌙', '🦊', '🐢', '✍️', '🎧', '🧭', '🍵'];
+    await showAppSheet<void>(
+      context,
+      (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final c = ctx.sc;
+          final st = app.settings;
+          return SheetBody(
+            title: 'Profile',
+            subtitle: 'Only on this device',
+            children: [
+              Center(child: _Avatar(name: nameCtl.text.isEmpty ? 'Reader' : nameCtl.text, emoji: st.profileEmoji, hue: st.profileHue, size: 84)),
+              const SizedBox(height: 18),
+              AppField(
+                controller: nameCtl,
+                label: 'Name',
+                hint: 'What should Sefer call you?',
+                onChanged: (v) {
+                  app.updateSettings((x) => x.profileName = v.trim());
+                  setSheet(() {});
+                },
+              ),
+              const SizedBox(height: 18),
+              const Kicker('Picture'),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final e in emojis)
+                    Pressable(
+                      scale: 0.9,
+                      onTap: () => app.updateSettings((x) => x.profileEmoji = e),
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: c.bgRaised2,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: st.profileEmoji == e ? c.ember : Colors.transparent, width: 2),
+                        ),
+                        child: e.isEmpty
+                            ? Text('Aa', style: AppTheme.f(14, weight: FontWeight.w800, color: c.textSecondary))
+                            : Text(e, style: const TextStyle(fontSize: 22)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Kicker('Colour'),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (var i = 0; i < coverHues.length; i++)
+                    Pressable(
+                      scale: 0.9,
+                      onTap: () => app.updateSettings((x) => x.profileHue = i),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: coverHues[i],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: st.profileHue == i ? c.ember : Colors.transparent, width: 2.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _languageSheet(BuildContext context, String lang) => showAppSheet<void>(
+    context,
+    (ctx) {
+      final app = ctx.app;
+      final s = app.settings;
+      final c = ctx.sc;
+      final t = totals(app.activity);
+      return SheetBody(
+        title: languageName(lang),
+        subtitle: languageByCode(lang)?.native,
+        children: [
+          Row(
+            children: [
+              Expanded(child: StatValue(value: '${app.knownCount(lang)}', label: 'Known', roll: false)),
+              Expanded(child: StatValue(value: '${app.languageStreak(lang)}', label: 'Streak', roll: false)),
+              Expanded(child: StatValue(value: formatDuration(t.langSeconds[lang] ?? 0, short: true), label: 'Read', roll: false)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (lang != app.activeLanguage) ...[
+            PrimaryButton(
+              label: 'Study ${languageName(lang)} now',
+              onTap: () {
+                app.setActiveLanguage(lang);
+                Navigator.pop(ctx);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+          ToolGroup(
+            color: c.bgRaised2,
+            radius: 18,
+            children: [
+              ToolRow(
+                icon: PhosphorIconsRegular.textAa,
+                label: 'Reader font',
+                value: s.fontByLanguage[lang] == null ? 'Default' : readerFontById(s.fontByLanguage[lang]!).label,
+                onTap: () async {
+                  final v = await pickOption<String>(
+                    ctx,
+                    title: 'Font for ${languageName(lang)}',
+                    selected: s.fontByLanguage[lang] ?? '',
+                    items: [
+                      OptionItem('', 'Same as everything else', detail: readerFontById(s.readerFont).label),
+                      for (final f in allReaderFonts) OptionItem(f.id, f.label, detail: f.note),
+                    ],
+                  );
+                  if (v == null) return;
+                  app.updateSettings((x) => v.isEmpty ? x.fontByLanguage.remove(lang) : x.fontByLanguage[lang] = v);
+                },
+              ),
+            ],
+          ),
+          if (s.learning.contains(lang)) ...[
+            const SizedBox(height: 12),
+            GhostButton(
+              label: 'Stop listing this language',
+              color: c.danger,
+              onTap: () {
+                app.updateSettings((x) {
+                  x.learning.remove(lang);
+                  if (x.activeLanguage == lang) x.activeLanguage = null;
+                });
+                Navigator.pop(ctx);
+              },
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Its stories and words stay; it just leaves your list.',
+              textAlign: TextAlign.center,
+              style: AppTheme.f(11.5, weight: FontWeight.w500, color: c.textTertiary),
+            ),
+          ],
+        ],
+      );
+    },
+  );
 
   Future<void> _backup(BuildContext context) async {
     final app = context.appRead;
@@ -206,9 +464,11 @@ class SettingsScreen extends StatelessWidget {
     final name = 'sefer-backup-${stamp()}.json';
     if (how == 'save') {
       final ok = await Io.saveText(name, json, mime: 'application/json');
+      if (ok) app.updateSettings((x) => x.lastBackupAt = DateTime.now());
       if (ok && context.mounted) showNotchToast(context, title: 'Backup saved', subtitle: name, icon: PhosphorIconsFill.cloudCheck);
     } else {
       await Io.shareFile(name, json, mime: 'application/json');
+      app.updateSettings((x) => x.lastBackupAt = DateTime.now());
     }
   }
 
@@ -276,6 +536,58 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.name, required this.emoji, required this.hue, required this.size});
+  final String name;
+  final String emoji;
+  final int hue;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = coverTone(hue, context.sc);
+    final initials = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w.characters.first.toUpperCase()).join();
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: tone.paper, shape: BoxShape.circle),
+      child: emoji.isNotEmpty
+          ? Text(emoji, style: TextStyle(fontSize: size * 0.46))
+          : Text(initials.isEmpty ? '·' : initials, style: AppTheme.f(size * 0.36, weight: FontWeight.w800, color: tone.ink)),
+    );
+  }
+}
+
+class _Mini extends StatelessWidget {
+  const _Mini({required this.value, required this.label, required this.icon, required this.color, required this.onTap});
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    return SoftCard(
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 8),
+          Text(value, style: AppTheme.f(20, weight: FontWeight.w800, color: c.text)),
+          const SizedBox(height: 2),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(11.5, weight: FontWeight.w600, color: c.textTertiary)),
+        ],
+      ),
+    );
+  }
+}
+
 // ------------------------------------------------------------------ appearance
 
 class AppearanceScreen extends StatelessWidget {
@@ -290,11 +602,49 @@ class AppearanceScreen extends StatelessWidget {
       x.themeMode = m;
       if (id != null) x.customThemeId = id;
     });
+    const accents = [
+      null,
+      Color(0xFFD9A184), Color(0xFFE0B15A), Color(0xFF8FA377), Color(0xFF7FA8C9),
+      Color(0xFFA78BDA), Color(0xFFE6A4B9), Color(0xFFE5674C), Color(0xFF5FB3A8),
+    ];
     return PageScroll(
       id: 'settings-appearance',
       children: [
-        ScreenHeader(title: 'Theme', onBack: app.back),
+        ScreenHeader(title: 'Appearance', onBack: app.back),
         const SizedBox(height: 22),
+        const Kicker('Feel'),
+        const SizedBox(height: 6),
+        Text(
+          'How the app is laid out: spacing, density and how much detail shows.',
+          style: AppTheme.f(12.5, weight: FontWeight.w500, color: c.textSecondary),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          padding: EdgeInsets.zero,
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.86,
+          children: [
+            for (final f in Feel.all)
+              _FeelTile(
+                feel: f,
+                selected: s.feel == f.id,
+                onTap: () => app.updateSettings((x) {
+                  x.feel = f.id;
+                  // A feel places the library differently too.
+                  x.libraryView = f.libraryView;
+                  if (f.id == 'compact') x.gridColumns = 3;
+                  if (f.id == 'classic' || f.id == 'airy') x.gridColumns = 2;
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        const Kicker('Theme'),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(child: _ThemeTile(label: 'Dark', palette: SeferColors.dark, selected: s.themeMode == 'dark', onTap: () => mode('dark'))),
@@ -312,17 +662,15 @@ class AppearanceScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 28),
-        SectionHeading('Your themes', trailing: '${s.customThemes.length}'),
         const SizedBox(height: 14),
-        if (s.customThemes.isNotEmpty)
+        if (s.customThemes.isNotEmpty) ...[
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: [
               for (final t in s.customThemes)
                 SizedBox(
-                  width: (MediaQuery.sizeOf(context).width - 40 - 20) / 3,
+                  width: (MediaQuery.sizeOf(context).width - context.feel.gutter * 2 - 20) / 3,
                   child: _ThemeTile(
                     label: t.name,
                     palette: t.palette,
@@ -333,16 +681,11 @@ class AppearanceScreen extends StatelessWidget {
                 ),
             ],
           ),
-        if (s.customThemes.isNotEmpty) ...[
           const SizedBox(height: 8),
-          Text(
-            'Long-press a theme to edit it.',
-            textAlign: TextAlign.center,
-            style: AppTheme.f(11.5, weight: FontWeight.w500, color: c.textTertiary),
-          ),
+          Text('Long-press a theme to edit it.', textAlign: TextAlign.center, style: AppTheme.f(11.5, weight: FontWeight.w500, color: c.textTertiary)),
+          const SizedBox(height: 10),
         ],
-        const SizedBox(height: 14),
-        PrimaryButton(
+        GhostButton(
           label: 'Create a theme',
           icon: PhosphorIconsBold.paintBrush,
           onTap: () {
@@ -351,21 +694,54 @@ class AppearanceScreen extends StatelessWidget {
           },
         ),
         const SizedBox(height: 28),
-        const Kicker('Background'),
+        const Kicker('Accent'),
         const SizedBox(height: 10),
-        SegToggle<String>(
-          value: s.background,
-          expand: true,
-          options: const {'none': 'Plain', 'dots': 'Dots', 'grid': 'Grid'},
-          onChanged: (v) => app.updateSettings((x) => x.background = v),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final a in accents)
+              Semantics(
+                button: true,
+                selected: (a == null && s.accentHex == null) || (a != null && s.accentHex == colorToHex(a)),
+                label: a == null ? 'Theme accent' : 'Accent ${colorToHex(a)}',
+                excludeSemantics: true,
+                child: Pressable(
+                  scale: 0.9,
+                  onTap: () => app.updateSettings((x) => x.accentHex = a == null ? null : colorToHex(a)),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: a ?? c.bgRaised2,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: ((a == null && s.accentHex == null) || (a != null && s.accentHex == colorToHex(a))) ? c.ember : c.border,
+                        width: 2.5,
+                      ),
+                    ),
+                    child: a == null ? Icon(PhosphorIconsBold.arrowCounterClockwise, size: 14, color: c.textSecondary) : null,
+                  ),
+                ),
+              ),
+          ],
         ),
-        const SizedBox(height: 22),
-        const Kicker('Interface text size'),
+        const SizedBox(height: 28),
+        const Kicker('Shape and type'),
         const SizedBox(height: 10),
         ToolGroup(
           children: [
             SliderRow(
-              label: 'Scale',
+              label: 'Corner roundness',
+              value: s.roundness,
+              min: 0.4,
+              max: 1.6,
+              divisions: 12,
+              format: (v) => v < 0.7 ? 'Square' : (v > 1.2 ? 'Round' : 'Soft'),
+              onChanged: (v) => app.updateSettings((x) => x.roundness = double.parse(v.toStringAsFixed(1))),
+            ),
+            SliderRow(
+              label: 'Interface text size',
               value: s.uiScale,
               min: 0.85,
               max: 1.3,
@@ -373,9 +749,124 @@ class AppearanceScreen extends StatelessWidget {
               format: (v) => '${(v * 100).round()}%',
               onChanged: (v) => app.updateSettings((x) => x.uiScale = double.parse(v.toStringAsFixed(2))),
             ),
+            ToolRow(
+              label: 'Interface font',
+              value: uiFonts[s.uiFont]?.$1 ?? 'Nunito',
+              onTap: () async {
+                final v = await pickOption<String>(context, title: 'Interface font', selected: s.uiFont, items: [
+                  for (final e in uiFonts.entries) OptionItem(e.key, e.value.$1),
+                ]);
+                if (v != null) app.updateSettings((x) => x.uiFont = v);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        const Kicker('Surfaces'),
+        const SizedBox(height: 10),
+        ToolGroup(
+          children: [
+            ToolRow(
+              label: 'Frosted glass',
+              detail: 'Blur behind the bars. Turn off for extra smoothness on older phones.',
+              trailing: TinySwitch(value: s.glass, onChanged: (v) => app.updateSettings((x) => x.glass = v)),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: SegToggle<String>(
+                value: s.background,
+                expand: true,
+                options: const {'none': 'Plain', 'dots': 'Dots', 'grid': 'Grid'},
+                onChanged: (v) => app.updateSettings((x) => x.background = v),
+              ),
+            ),
           ],
         ),
       ],
+    );
+  }
+}
+
+/// A feel, drawn as a tiny wireframe of the library in that layout.
+class _FeelTile extends StatelessWidget {
+  const _FeelTile({required this.feel, required this.selected, required this.onTap});
+  final Feel feel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    Widget bar(double w, double h, Color col) => Container(width: w, height: h, decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(h / 2)));
+    Widget card(double w, double h) => Container(width: w, height: h, decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(6 * feel.radius)));
+    final preview = switch (feel.id) {
+      'minimal' => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bar(44, 7, c.text),
+            const SizedBox(height: 12),
+            for (var i = 0; i < 4; i++) ...[bar(70.0 - i * 9, 5, c.textSecondary), const SizedBox(height: 9)],
+          ],
+        ),
+      'compact' => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bar(34, 6, c.text),
+            const SizedBox(height: 6),
+            for (var i = 0; i < 5; i++) ...[
+              Row(children: [card(10, 13), const SizedBox(width: 5), bar(50, 4, c.textSecondary)]),
+              const SizedBox(height: 4),
+            ],
+          ],
+        ),
+      'airy' => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bar(50, 8, c.text),
+            const SizedBox(height: 12),
+            Row(children: [card(34, 44), const SizedBox(width: 10), card(34, 44)]),
+          ],
+        ),
+      _ => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bar(22, 3, c.textTertiary),
+            const SizedBox(height: 4),
+            bar(42, 7, c.text),
+            const SizedBox(height: 9),
+            Row(children: [card(26, 34), const SizedBox(width: 6), card(26, 34), const SizedBox(width: 6), card(26, 34)]),
+            const SizedBox(height: 5),
+            bar(56, 4, c.textSecondary),
+          ],
+        ),
+    };
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${feel.label}. ${feel.blurb}',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.96,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c.bgRaised,
+            borderRadius: BorderRadius.circular(context.feel.r(20)),
+            border: Border.all(color: selected ? c.ember : c.border.withValues(alpha: 0.6), width: selected ? 2 : 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: preview),
+              Text(feel.label, style: AppTheme.f(14.5, weight: FontWeight.w800, color: c.text)),
+              const SizedBox(height: 2),
+              Text(feel.blurb, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTheme.f(11, weight: FontWeight.w500, color: c.textSecondary, height: 1.25)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -522,13 +1013,14 @@ class LayoutScreen extends StatelessWidget {
     return PageScroll(
       id: 'settings-layout',
       children: [
-        ScreenHeader(title: 'Layout', onBack: app.back),
+        ScreenHeader(title: 'Navigation', onBack: app.back),
         const SizedBox(height: 22),
         const Kicker('Navigation bar'),
         const SizedBox(height: 6),
         Text(
-          'Up to four tabs. Anything you hide stays reachable: Settings from the '
-          'gear on each tab, the rest from Settings and the Library.',
+          'Up to $maxTabs tabs; the bar re-spaces itself as you add or remove them. '
+          'Anything you hide stays reachable: Profile holds every setting, and '
+          'the streak opens Stats.',
           style: AppTheme.f(12.5, weight: FontWeight.w500, color: c.textSecondary, height: 1.4),
         ),
         const SizedBox(height: 12),
@@ -586,7 +1078,7 @@ class LayoutScreen extends StatelessWidget {
                 Pill(
                   label: 'Add ${tabMeta[t]!.label}',
                   icon: PhosphorIconsBold.plus,
-                  onTap: s.tabs.length >= 4 ? null : () => app.updateSettings((x) => x.tabs.add(t)),
+                  onTap: s.tabs.length >= maxTabs ? null : () => app.updateSettings((x) => x.tabs.add(t)),
                 ),
             ],
           ),
@@ -607,29 +1099,30 @@ class LayoutScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 26),
-        const Kicker('Library'),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         ToolGroup(
           children: [
             Padding(
               padding: const EdgeInsets.all(12),
               child: SegToggle<String>(
-                value: s.libraryView,
+                value: s.navStyle,
                 expand: true,
-                options: const {'grid': 'Covers', 'list': 'List'},
-                onChanged: (v) => app.updateSettings((x) => x.libraryView = v),
+                options: const {'floating': 'Floating bar', 'docked': 'Docked to the edge'},
+                onChanged: (v) => app.updateSettings((x) => x.navStyle = v),
               ),
             ),
-            if (s.libraryView == 'grid')
-              ToolRow(
-                label: 'Covers per row',
-                trailing: SegToggle<int>(
-                  value: s.gridColumns,
-                  options: const {2: '2', 3: '3'},
-                  onChanged: (v) => app.updateSettings((x) => x.gridColumns = v),
-                ),
-              ),
+            ToolRow(
+              icon: PhosphorIconsRegular.rocketLaunch,
+              label: 'Open the app on',
+              value: s.startTab == 'last' ? 'Where I left off' : tabMeta[s.startTab]?.label ?? 'Library',
+              onTap: () async {
+                final v = await pickOption<String>(context, title: 'Open the app on', selected: s.startTab, items: [
+                  const OptionItem('last', 'Where I left off'),
+                  for (final t in s.tabs) OptionItem(t, tabMeta[t]!.label, icon: tabMeta[t]!.icon),
+                ]);
+                if (v != null) app.updateSettings((x) => x.startTab = v);
+              },
+            ),
           ],
         ),
       ],

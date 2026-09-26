@@ -17,6 +17,7 @@ Widget buildScreen(String route) {
   return switch (name) {
     'add' => const AddScreen(),
     'words' => const WordsScreen(),
+    'profile' => const ProfileScreen(),
     'stats' => const StatsScreen(),
     'settings' => switch (arg) {
       'appearance' => const AppearanceScreen(),
@@ -24,7 +25,7 @@ Widget buildScreen(String route) {
       'layout' => const LayoutScreen(),
       'motion' => const MotionScreen(),
       'about' => const AboutScreen(),
-      _ => const SettingsScreen(),
+      _ => const ProfileScreen(),
     },
     'reader' => ReaderScreen(id: arg),
     'story' => StoryScreen(id: arg),

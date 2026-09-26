@@ -14,12 +14,13 @@ import 'package:sefer/data/app_state.dart';
 import 'package:sefer/data/importer.dart';
 import 'package:sefer/data/models.dart';
 import 'package:sefer/data/store.dart';
+import 'package:sefer/widgets/word_text.dart';
 
 Future<void> _loadFonts() async {
   final families = <String, List<String>>{};
   for (final f in Directory('assets/fonts').listSync().whereType<File>()) {
     final name = f.uri.pathSegments.last;
-    if (!name.endsWith('.ttf')) continue;
+    if (!name.endsWith('.ttf') && !name.endsWith('.otf')) continue;
     families.putIfAbsent(name.split('-').first, () => []).add(f.path);
   }
   for (final e in families.entries) {
@@ -108,6 +109,8 @@ Future<AppState> _seed() async {
   app.setWord('es', 'jardín', status: 1, meaning: 'garden', example: 'Mi abuela tiene un jardín pequeño.');
   app.setWord('es', 'abuela', status: 4, meaning: 'grandmother');
   app.setWord('he', 'הָאָרֶץ', status: 2, meaning: 'the earth');
+  app.settings.learning = ['el', 'es', 'he', 'ar'];
+  app.settings.profileName = 'Issa';
   final r = Random(4);
   final now = DateTime.now();
   for (var d = 0; d < 180; d++) {
@@ -167,7 +170,8 @@ void main() {
     await shot(t, app, 'reader_word', then: () async {
       app.openStory(app.stories.first);
       await t.pumpAndSettle();
-      await t.tap(find.descendant(of: find.byType(CustomScrollView), matching: find.text('Καλημέρα')).last);
+      final r = t.renderObject<RenderWordText>(find.byType(WordText).first);
+      await t.tapAt(r.globalRectOf(0).center);
       await t.pumpAndSettle();
     });
   });
@@ -192,13 +196,41 @@ void main() {
     });
   });
 
-  for (final r in ['add', 'words', 'stats', 'settings', 'settings:appearance', 'settings:layout']) {
+  for (final r in ['add', 'words', 'stats', 'profile', 'settings:appearance', 'settings:layout', 'settings:reader']) {
     testWidgets('screen $r', (t) async {
       final app = await _seed();
       await shot(t, app, r.replaceAll(':', '_'), then: () async {
         app.go(r);
         await t.pumpAndSettle();
       });
+    });
+  }
+
+
+  testWidgets('reader read mode', (t) async {
+    final app = await _seed();
+    app.settings.readerMode = 'read';
+    app.settings.readerPaper = 'sepia';
+    await shot(t, app, 'reader_readmode', then: () async {
+      app.openStory(app.stories.first);
+      await t.pumpAndSettle();
+      final r = t.renderObject<RenderWordText>(find.byType(WordText).first);
+      await t.tapAt(r.globalRectOf(2).center);
+      await t.pumpAndSettle();
+    });
+  });
+
+  for (final f in ['minimal', 'compact', 'airy']) {
+    testWidgets('feel $f', (t) async {
+      final app = await _seed();
+      app.settings.feel = f;
+      app.settings.libraryView = {'minimal': 'titles', 'compact': 'list', 'airy': 'shelf'}[f]!;
+      if (f == 'compact') {
+        app.settings.navStyle = 'docked';
+        app.settings.gridColumns = 3;
+      }
+      if (f == 'minimal') app.settings.showCenterButton = false;
+      await shot(t, app, 'feel_$f');
     });
   }
 

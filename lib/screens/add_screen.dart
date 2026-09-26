@@ -38,7 +38,7 @@ class _AddScreenState extends State<AddScreen> {
   List<String> _files = [];
   bool _guide = false;
 
-  String get _lang => _Draft.language ?? context.appRead.libraryLanguages.firstOrNull ?? 'und';
+  String get _lang => _Draft.language ?? context.appRead.activeLanguage ?? 'und';
   String get _trans => _Draft.translation ?? context.appRead.settings.defaultTranslationLang;
 
   PlainTextOptions get _plain => PlainTextOptions(
@@ -121,7 +121,7 @@ class _AddScreenState extends State<AddScreen> {
     return PageScroll(
       id: 'add',
       children: [
-        const TabHeader(kicker: 'Your texts, your way', title: 'Add', actions: [SettingsAction()]),
+        const TabHeader(kicker: 'Your texts, your way', title: 'Add', actions: [LanguagePill()]),
         const SizedBox(height: 20),
         SegToggle<String>(
           value: _Draft.mode,
@@ -333,6 +333,7 @@ class _Review extends StatelessWidget {
                               '${s.wordCount} words · ${s.sentenceCount} sentences',
                               style: AppTheme.f(12, weight: FontWeight.w500, color: c.textSecondary),
                             ),
+                            if (context.app.duplicateOf(s) != null) _Chip('already in library', c.warn),
                             if (s.hasTranslations) _Chip('translated', c.sage),
                             if (s.paragraphs.any((p) => p.sentences.any((x) => x.glosses.isNotEmpty))) _Chip('glosses', c.info),
                             if (s.paragraphs.any((p) => p.sentences.any((x) => x.transliterations.isNotEmpty)))

@@ -35,6 +35,7 @@ class _WordsScreenState extends State<WordsScreen> {
   List<VocabEntry> _visible(AppState app) {
     final q = _WordsFilters.query.trim().toLowerCase();
     final list = app.vocab.values.where((e) {
+      if (!app.inScope(e.language)) return false;
       if (_WordsFilters.language != null && e.language != _WordsFilters.language) return false;
       switch (_WordsFilters.status) {
         case 'learning':
@@ -66,8 +67,8 @@ class _WordsScreenState extends State<WordsScreen> {
     final app = context.app;
     final c = context.sc;
     final list = _visible(app);
-    final langs = app.vocabLanguages;
-    final lang = _WordsFilters.language;
+    final langs = app.vocabLanguages.where(app.inScope).toList();
+    final lang = app.scoped ? app.activeLanguage : _WordsFilters.language;
     return PageScroll(
       id: 'words',
       children: [
@@ -76,7 +77,6 @@ class _WordsScreenState extends State<WordsScreen> {
           title: 'Words',
           actions: [
             RoundBtn(icon: PhosphorIconsRegular.export, label: 'Export to Anki', onTap: () => showAnkiExport(context)),
-            const SettingsAction(),
           ],
         ),
         const SizedBox(height: 20),

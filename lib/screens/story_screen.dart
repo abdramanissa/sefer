@@ -348,6 +348,7 @@ class _StoryScreenState extends State<StoryScreen> {
                 const Kicker('Doodle'),
                 const SizedBox(height: 10),
                 GridView.count(
+          padding: EdgeInsets.zero,
                   crossAxisCount: 4,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),

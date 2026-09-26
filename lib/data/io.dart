@@ -49,6 +49,15 @@ class Io {
     return f == null ? null : PickedFile(f.name, await f.readAsBytes());
   }
 
+  static Future<PickedFile?> pickFont() async {
+    final f = await FilePicker.pickFile(
+      dialogTitle: 'Choose a font',
+      type: FileType.custom,
+      allowedExtensions: ['ttf', 'otf'],
+    );
+    return f == null ? null : PickedFile(f.name, await f.readAsBytes());
+  }
+
   static Future<PickedFile?> pickImage() async {
     final f = await FilePicker.pickFile(dialogTitle: 'Choose a cover', type: FileType.image);
     return f == null ? null : PickedFile(f.name, await f.readAsBytes());

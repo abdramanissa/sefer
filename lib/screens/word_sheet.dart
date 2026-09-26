@@ -117,7 +117,7 @@ class _WordSheetState extends State<WordSheet> {
     final gloss = lookupLoose(widget.sentence.glosses, widget.word);
     final reading = readingFor(word: widget.word, language: lang, sentence: widget.sentence, entry: e);
     final dir = isRtl(lang, widget.word) ? TextDirection.rtl : TextDirection.ltr;
-    final font = readerFontById(app.settings.readerFont);
+    final font = readerFontFor(app.settings.fontByLanguage, app.settings.readerFont, lang);
     final showReading = reading.text.isNotEmpty && app.settings.translit != 'off';
 
     return SheetBody(
