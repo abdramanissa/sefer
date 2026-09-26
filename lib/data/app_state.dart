@@ -75,6 +75,14 @@ class AppState extends ChangeNotifier {
     }
     final set = await store.read(_settings);
     if (set is Map) settings = Settings.fromJson(set.cast<String, dynamic>());
+    final start = settings.startTab == 'last' ? settings.lastTab : settings.startTab;
+    if (settings.tabs.contains(start)) {
+      route = start;
+      lastTab = start;
+    } else if (settings.tabs.isNotEmpty) {
+      route = settings.tabs.first;
+      lastTab = route;
+    }
     loaded = true;
     notifyListeners();
   }
@@ -201,6 +209,10 @@ class AppState extends ChangeNotifier {
       moveDepth = isTab(route) ? 0 : -1;
       _stack.clear();
       lastTab = r;
+      if (settings.lastTab != r) {
+        settings.lastTab = r;
+        _markDirty(_settings);
+      }
     } else {
       moveDepth = 1;
       _stack.add(route);
@@ -263,6 +275,42 @@ class AppState extends ChangeNotifier {
     return unread.isEmpty ? null : unread.first;
   }
 
+  /// The language you're working in now: the chosen one, else the first you
+  /// study, else the most common in the library.
+  String? get activeLanguage {
+    final a = settings.activeLanguage;
+    if (a != null && a.isNotEmpty) return a;
+    if (settings.learning.isNotEmpty) return settings.learning.first;
+    final langs = libraryLanguages;
+    return langs.isEmpty ? null : langs.first;
+  }
+
+  void setActiveLanguage(String lang) => updateSettings((s) {
+    s.activeLanguage = lang;
+    if (!s.learning.contains(lang)) s.learning.add(lang);
+  });
+
+  /// In "active language only" mode, other languages stay out of sight
+  /// everywhere: library, words and stats.
+  bool get scoped => settings.languageScope == 'active' && activeLanguage != null;
+
+  bool inScope(String language) => !scoped || language == activeLanguage;
+
+  List<Story> get visibleStories => scoped ? stories.where((s) => inScope(s.language)).toList() : stories;
+
+  /// Languages to offer in switchers: the ones you study, then any others in
+  /// the library.
+  List<String> get knownLanguages {
+    final out = [...settings.learning];
+    for (final l in libraryLanguages) {
+      if (!out.contains(l)) out.add(l);
+    }
+    for (final l in vocabLanguages) {
+      if (!out.contains(l)) out.add(l);
+    }
+    return out;
+  }
+
   List<String> get libraryLanguages {
     final counts = <String, int>{};
     for (final s in stories) {
@@ -289,13 +337,79 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes a story. Its cover file is kept for a few seconds so
+  /// [restoreStory] can undo the delete.
   Future<void> deleteStory(String id) async {
     final s = story(id);
     if (s == null) return;
+    final index = stories.indexOf(s);
     stories.remove(s);
-    if (s.cover.imagePath != null) await store.delete('covers/${s.cover.imagePath}');
+    _recentlyDeleted = (s, index);
     _markDirty(_library);
     notifyListeners();
+    final cover = s.cover.imagePath;
+    if (cover != null) {
+      Future.delayed(const Duration(seconds: 8), () async {
+        if (story(s.id) == null) await store.delete('covers/$cover');
+      });
+    }
+  }
+
+  (Story, int)? _recentlyDeleted;
+
+  /// Puts back the story deleted last. Returns false if there is none.
+  bool restoreStory() {
+    final d = _recentlyDeleted;
+    if (d == null) return false;
+    _recentlyDeleted = null;
+    stories.insert(d.$2.clamp(0, stories.length), d.$1);
+    _markDirty(_library);
+    notifyListeners();
+    return true;
+  }
+
+  void toggleFavorite(Story s) {
+    s.favorite = !s.favorite;
+    _markDirty(_library);
+    notifyListeners();
+  }
+
+  /// A story with the same language, title and opening already exists.
+  Story? duplicateOf(Story s) {
+    final opening = s.paragraphs.isEmpty ? '' : s.paragraphs.first.text;
+    for (final x in stories) {
+      if (x.language == s.language &&
+          x.title.trim().toLowerCase() == s.title.trim().toLowerCase() &&
+          (x.paragraphs.isEmpty ? '' : x.paragraphs.first.text) == opening) {
+        return x;
+      }
+    }
+    return null;
+  }
+
+  /// Your reading speed in words a minute, from your own history once there
+  /// is enough of it; 150 until then.
+  int get wordsPerMinute {
+    var secs = 0, wordsRead = 0;
+    for (final d in activity.values) {
+      secs += d.seconds;
+      wordsRead += d.words;
+    }
+    if (secs < 600 || wordsRead < 300) return 150;
+    return (wordsRead / (secs / 60)).round().clamp(40, 400);
+  }
+
+  /// Minutes left to read, from the saved position.
+  int minutesLeft(Story s) {
+    final left = (s.wordCount * (1 - s.progress)).round();
+    return (left / wordsPerMinute).ceil().clamp(1, 9999);
+  }
+
+  /// What to read after [s]: the newest unfinished story in the same language.
+  Story? nextAfter(Story s) {
+    final list = stories.where((x) => x.id != s.id && x.finishedAt == null && x.language == s.language).toList()
+      ..sort((a, b) => (b.lastOpenedAt ?? b.createdAt).compareTo(a.lastOpenedAt ?? a.createdAt));
+    return list.firstOrNull;
   }
 
   Future<String> saveCoverImage(Uint8List bytes, String ext) async {
@@ -523,7 +637,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  final Map<String, (int, int, StoryWordStats)> _statsCache = {};
+
+  /// Word counts for a story, cached until vocabulary or the text changes.
   StoryWordStats wordStats(Story s) {
+    final hit = _statsCache[s.id];
+    final textStamp = s.updatedAt.microsecondsSinceEpoch;
+    if (hit != null && hit.$1 == vocabVersion && hit.$2 == textStamp) return hit.$3;
+    final st = _computeWordStats(s);
+    _statsCache[s.id] = (vocabVersion, textStamp, st);
+    return st;
+  }
+
+  StoryWordStats _computeWordStats(Story s) {
     var known = 0, learning = 0, fresh = 0;
     for (final k in s.uniqueKeys) {
       final e = vocab['${s.language.toLowerCase()}|$k'];

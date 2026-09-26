@@ -19,6 +19,9 @@ Future<void> showStoryActions(BuildContext context, Story story) async {
     subtitle: '${story.wordCount} words · ${story.paragraphs.length} paragraphs',
     items: [
       const OptionItem('read', 'Read', icon: PhosphorIconsRegular.bookOpenText),
+      story.favorite
+          ? const OptionItem('fav', 'Remove from favourites', icon: PhosphorIconsFill.star)
+          : const OptionItem('fav', 'Add to favourites', icon: PhosphorIconsRegular.star),
       const OptionItem('edit', 'Details, cover and text', icon: PhosphorIconsRegular.pencilSimple),
       const OptionItem('shelves', 'Shelves', icon: PhosphorIconsRegular.bookBookmark),
       story.finishedAt == null
@@ -32,6 +35,8 @@ Future<void> showStoryActions(BuildContext context, Story story) async {
   switch (action) {
     case 'read':
       app.openStory(story);
+    case 'fav':
+      app.toggleFavorite(story);
     case 'edit':
       app.go('story:${story.id}');
     case 'shelves':
@@ -50,18 +55,20 @@ Future<void> showStoryActions(BuildContext context, Story story) async {
     case 'export':
       await exportStoriesFlow(context, [story]);
     case 'delete':
-      final ok = await askConfirm(
-        context,
-        title: 'Delete this story?',
-        body: 'Its text, cover and reading position are removed. Words you saved stay in your vocabulary.',
-        action: 'Delete',
-        danger: true,
-      );
-      if (ok) {
-        await app.deleteStory(story.id);
-        if (context.mounted) {
-          showNotchToast(context, title: 'Story deleted', icon: PhosphorIconsFill.trash, accent: c.danger);
-        }
+      // No confirm: the toast offers an undo instead.
+      await app.deleteStory(story.id);
+      if (app.routeName == 'story' || app.routeName == 'reader') app.go(app.lastTab);
+      if (context.mounted) {
+        showNotchToast(
+          context,
+          title: 'Story deleted',
+          subtitle: story.title,
+          icon: PhosphorIconsFill.trash,
+          accent: c.danger,
+          action: 'Undo',
+          onAction: app.restoreStory,
+          duration: const Duration(seconds: 5),
+        );
       }
   }
 }

@@ -5,6 +5,9 @@ import 'package:sefer/data/app_state.dart';
 import 'package:sefer/data/importer.dart';
 import 'package:sefer/data/models.dart';
 import 'package:sefer/data/store.dart';
+import 'package:sefer/screens/word_card.dart';
+import 'package:sefer/screens/word_sheet.dart';
+import 'package:sefer/widgets/word_text.dart';
 
 const greek = '''
 {
@@ -59,6 +62,9 @@ Future<void> _go(WidgetTester tester, AppState app, String route) async {
   await tester.pumpAndSettle();
 }
 
+RenderWordText _paragraph(WidgetTester tester) =>
+    tester.renderObject<RenderWordText>(find.byType(WordText).first);
+
 /// Removes the app so periodic timers (the reader's clock) are cancelled.
 Future<void> _unmount(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox());
@@ -91,6 +97,7 @@ void main() {
       'settings:appearance',
       'settings:reader',
       'settings:layout',
+      'profile',
       'settings:motion',
       'settings:about',
       'story:${story.id}',
@@ -131,7 +138,7 @@ void main() {
     await _unmount(tester);
   });
 
-  testWidgets('reader: tap a word, see gloss and reading, set a level', (tester) async {
+  testWidgets('reader: tap a word for the card, set a level, double-tap to know', (tester) async {
     final app = await _state();
     await _pump(tester, app);
     final story = app.stories.firstWhere((s) => s.language == 'el');
@@ -139,8 +146,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.routeName, 'reader');
 
-    await tester.tap(find.descendant(of: find.byType(CustomScrollView), matching: find.text('Καλημέρα')).last);
+    final text = _paragraph(tester);
+    expect(text.plainText, contains('Καλημέρα σας!'));
+    await tester.tapAt(text.globalRectOf(0).center);
     await tester.pumpAndSettle();
+    expect(find.byType(WordCard), findsOneWidget);
     expect(find.text('good morning'), findsWidgets);
     expect(find.text('kaliméra'), findsOneWidget);
 
@@ -149,15 +159,41 @@ void main() {
     expect(app.statusOf('el', 'καλημέρα'), 2);
     expect(app.entry('el', 'καλημέρα')!.meaning, 'good morning');
 
-    // Close the sheet, finish the story.
-    await tester.tapAt(const Offset(20, 60));
+    // Double-tap σας: known in one move.
+    final sas = _paragraph(tester).globalRectOf(1).center;
+    await tester.tapAt(sas);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.tapAt(sas);
     await tester.pumpAndSettle();
+    expect(app.statusOf('el', 'σας'), WordStatus.known);
+
     await tester.scrollUntilVisible(find.textContaining('Finish'), 200, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.textContaining('Finish'));
     await tester.pumpAndSettle(const Duration(seconds: 3));
     expect(story.finishedAt, isNotNull);
-    expect(app.statusOf('el', 'σας'), WordStatus.known);
     expect(app.statusOf('el', 'καλημέρα'), 2);
+    await _unmount(tester);
+  });
+
+  testWidgets('reader: full sheet option and reading mode', (tester) async {
+    final app = await _state();
+    app.settings.wordPopup = 'sheet';
+    await _pump(tester, app);
+    app.openStory(app.stories.firstWhere((s) => s.language == 'el'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(_paragraph(tester).globalRectOf(0).center);
+    await tester.pumpAndSettle();
+    expect(find.byType(WordSheet), findsOneWidget);
+    await tester.tapAt(const Offset(20, 60));
+    await tester.pumpAndSettle();
+
+    app.updateSettings((s) => s.readerMode = 'read');
+    await tester.pumpAndSettle();
+    expect(tester.widget<WordText>(find.byType(WordText).first).marks, isEmpty);
+    await tester.tapAt(_paragraph(tester).globalRectOf(0).center);
+    await tester.pumpAndSettle();
+    expect(find.byType(WordCard), findsOneWidget);
+    expect(find.text('Good morning!'), findsOneWidget);
     await _unmount(tester);
   });
 
@@ -167,20 +203,53 @@ void main() {
     final story = app.stories.firstWhere((s) => s.language == 'he');
     app.openStory(story);
     await tester.pumpAndSettle();
-    expect(find.text('שָׁלוֹם'), findsOneWidget);
-    final dir = tester.widget<Directionality>(
-      find.ancestor(of: find.text('שָׁלוֹם'), matching: find.byType(Directionality)).first,
-    );
-    expect(dir.textDirection, TextDirection.rtl);
+    expect(_paragraph(tester).plainText, contains('שָׁלוֹם'));
+    expect(tester.widget<WordText>(find.byType(WordText).first).textDirection, TextDirection.rtl);
 
     app.updateSettings((s) => s.showMarks = false);
     await tester.pumpAndSettle();
-    expect(find.text('שָׁלוֹם'), findsNothing);
-    expect(find.text('שלום'), findsOneWidget);
+    expect(_paragraph(tester).plainText, isNot(contains('שָׁלוֹם')));
+    expect(_paragraph(tester).plainText, contains('שלום'));
 
     app.updateSettings((s) => s.translit = 'above');
     await tester.pumpAndSettle();
-    expect(find.text('shalom'), findsOneWidget);
+    final readings = tester.widget<WordText>(find.byType(WordText).first).marks.values.map((m) => m.reading);
+    expect(readings, contains('shalom'));
+    await _unmount(tester);
+  });
+
+  testWidgets('active-language mode hides other languages', (tester) async {
+    final app = await _state();
+    app.settings.learning = ['es', 'he'];
+    app.settings.activeLanguage = 'he';
+    app.settings.languageScope = 'active';
+    app.settings.libraryView = 'titles';
+    await _pump(tester, app);
+    expect(find.text('ספר'), findsOneWidget);
+    expect(find.text('El gato'), findsNothing);
+    app.setActiveLanguage('es');
+    await tester.pumpAndSettle();
+    expect(find.text('El gato'), findsOneWidget);
+    expect(find.text('ספר'), findsNothing);
+    await _unmount(tester);
+  });
+
+  testWidgets('each feel lays out the main screens', (tester) async {
+    final app = await _state();
+    await _pump(tester, app);
+    for (final f in ['minimal', 'compact', 'airy', 'classic']) {
+      app.updateSettings((s) {
+        s.feel = f;
+        s.libraryView = {'minimal': 'titles', 'compact': 'list', 'airy': 'shelf', 'classic': 'grid'}[f]!;
+        s.navStyle = f == 'compact' ? 'docked' : 'floating';
+        s.showCenterButton = f != 'minimal';
+        s.glass = f != 'compact';
+      });
+      for (final r in ['library', 'profile', 'settings:appearance', 'stats']) {
+        await _go(tester, app, r);
+        expect(tester.takeException(), isNull, reason: '$f $r');
+      }
+    }
     await _unmount(tester);
   });
 
@@ -188,7 +257,10 @@ void main() {
     final app = await _state();
     await _pump(tester, app);
     await _go(tester, app, 'settings:appearance');
-    await tester.ensureVisible(find.text('Create a theme'));
+    final page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(find.text('Create a theme'), 300, scrollable: page);
+    await tester.drag(page, const Offset(0, -250));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Create a theme'));
     await tester.pumpAndSettle();
     expect(app.routeName, 'theme');

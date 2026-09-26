@@ -13,6 +13,7 @@ class GlassSurface extends StatelessWidget {
     this.radius = 28,
     this.sigma = 22,
     this.shadow = true,
+    this.enabled = true,
   });
 
   final Widget child;
@@ -20,11 +21,28 @@ class GlassSurface extends StatelessWidget {
   final double sigma;
   final bool shadow;
 
+  /// Off: a plain opaque surface. Much cheaper to draw on older phones,
+  /// since nothing behind it has to be re-blurred every frame.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final c = context.sc;
     final dark = c.isDark;
     final r = BorderRadius.circular(radius);
+    if (!enabled) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: c.bgRaised,
+          borderRadius: r,
+          border: Border.all(color: c.border.withValues(alpha: 0.7), width: 0.8),
+          boxShadow: shadow
+              ? [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 24, offset: const Offset(0, 8))]
+              : null,
+        ),
+        child: child,
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: r,

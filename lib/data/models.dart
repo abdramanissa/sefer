@@ -150,6 +150,7 @@ class Story {
     this.progress = 0,
     this.readSeconds = 0,
     this.counted = 0,
+    this.favorite = false,
   }) : tags = tags ?? [],
        shelves = shelves ?? [],
        createdAt = createdAt ?? DateTime.now(),
@@ -178,6 +179,7 @@ class Story {
 
   /// Paragraphs already added to "words read" in this read-through.
   int counted;
+  bool favorite;
 
   int? _wordCount;
   int get wordCount => _wordCount ??= paragraphs.fold<int>(
@@ -237,6 +239,7 @@ class Story {
     progress: _dbl(j['progress']),
     readSeconds: _int(j['read_seconds']),
     counted: _int(j['counted']),
+    favorite: _bool(j['favorite']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -258,6 +261,7 @@ class Story {
     'progress': progress,
     'read_seconds': readSeconds,
     'counted': counted,
+    if (favorite) 'favorite': true,
   };
 
   /// The portable form used by import and export: the same shape as the
@@ -486,10 +490,29 @@ class CustomTheme {
   };
 }
 
+/// A font file the user imported. [file] lives in the app's `fonts/` folder.
+class CustomFont {
+  CustomFont({required this.id, required this.name, required this.file});
+  final String id;
+  String name;
+  final String file;
+
+  /// The family name it's registered under with the engine.
+  String get family => 'user-$id';
+
+  factory CustomFont.fromJson(Map<String, dynamic> j) =>
+      CustomFont(id: _str(j['id']), name: _str(j['name'], 'Font'), file: _str(j['file']));
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'file': file};
+}
+
 // ------------------------------------------------------------------ Settings
 
 /// Every destination that can sit in the nav bar.
-const allTabs = ['library', 'add', 'words', 'stats', 'settings'];
+const allTabs = ['library', 'add', 'words', 'stats', 'profile'];
+
+/// Most tabs the nav bar holds.
+const maxTabs = 5;
 
 class Settings {
   Settings();
@@ -518,7 +541,7 @@ class Settings {
   bool autoKnownOnFinish = true;
 
   // Layout.
-  List<String> tabs = ['library', 'add', 'words', 'stats'];
+  List<String> tabs = ['library', 'add', 'words', 'profile'];
   bool showLabels = true;
   bool showCenterButton = true;
   String libraryView = 'grid'; // grid | list
@@ -545,6 +568,47 @@ class Settings {
   bool haptics = true;
   bool reduceMotion = false;
   bool onboarded = false;
+
+  // Added in 0.2: feel, profile, more reader and library options.
+  String feel = 'classic'; // classic | minimal | compact | airy
+  bool glass = true; // frosted nav and bars
+  String? accentHex; // overrides the theme's accent
+  double roundness = 1.0; // 0.5 square .. 1.5 very round
+  String uiFont = 'nunito'; // nunito | atkinson | lexend | rubik
+  String startTab = 'last'; // last or a tab id
+  String lastTab = 'library';
+  String navStyle = 'floating'; // floating | docked
+  String languageScope = 'all'; // all | active: only the active language shows
+  bool showContinueCard = false;
+  String libraryGroup = 'none'; // none | language | shelf
+  String librarySort = 'recent';
+  bool libraryHideFinished = false;
+  bool libraryFavoritesFirst = true;
+  bool libraryShowStats = true; // known % and new words on cards
+  String readerMode = 'learn'; // learn | read
+  String wordPopup = 'card'; // card | sheet
+  String readerPaper = 'app'; // app | paper | sepia | dusk | black
+  double letterSpacing = 0;
+  bool boldText = false;
+  bool paragraphIndent = false;
+  String highlightStyle = 'fill'; // fill | underline | none
+  double highlightStrength = 1.0;
+  bool keepAwake = true;
+  bool showReaderProgress = true;
+  bool hideChromeOnScroll = true;
+  bool doubleTapKnown = true; // double-tap a word to mark it known
+  bool showReaderHeader = true;
+  bool dimRead = false; // fade paragraphs above the one you're on
+  Map<String, String> fontByLanguage = {}; // language → reader font id
+  List<CustomFont> customFonts = [];
+  String profileName = '';
+  String profileEmoji = '';
+  int profileHue = 6;
+  String nativeLanguage = 'en';
+  List<String> learning = []; // languages you study, in your order
+  String? activeLanguage;
+  DateTime? lastBackupAt;
+  int backupReminderDays = 14; // 0 = never
 
   factory Settings.fromJson(Map<String, dynamic> j) {
     final s = Settings();
@@ -573,8 +637,9 @@ class Settings {
       s.sentenceTranslations,
     );
     s.autoKnownOnFinish = _bool(j['auto_known'], s.autoKnownOnFinish);
-    final tabs = _strList(j['tabs']).where(allTabs.contains).toList();
-    if (j['tabs'] is List && tabs.isNotEmpty) s.tabs = tabs.take(4).toList();
+    // Settings used to be a tab; it now lives in Profile.
+    final tabs = _strList(j['tabs']).map((t) => t == 'settings' ? 'profile' : t).where(allTabs.contains).toSet().toList();
+    if (j['tabs'] is List && tabs.isNotEmpty) s.tabs = tabs.take(maxTabs).toList();
     s.showLabels = _bool(j['show_labels'], s.showLabels);
     s.showCenterButton = _bool(j['center_button'], s.showCenterButton);
     s.libraryView = _str(j['library_view'], s.libraryView);
@@ -598,6 +663,45 @@ class Settings {
     s.haptics = _bool(j['haptics'], s.haptics);
     s.reduceMotion = _bool(j['reduce_motion'], s.reduceMotion);
     s.onboarded = _bool(j['onboarded'], s.onboarded);
+    s.feel = _str(j['feel'], s.feel);
+    s.glass = _bool(j['glass'], s.glass);
+    s.accentHex = j['accent_hex'] as String?;
+    s.roundness = _dbl(j['roundness'], s.roundness).clamp(0.4, 1.6);
+    s.uiFont = _str(j['ui_font'], s.uiFont);
+    s.startTab = _str(j['start_tab'], s.startTab);
+    s.lastTab = _str(j['last_tab'], s.lastTab);
+    s.navStyle = _str(j['nav_style'], s.navStyle);
+    s.languageScope = _str(j['language_scope'], s.languageScope);
+    s.showContinueCard = _bool(j['continue_card'], s.showContinueCard);
+    s.libraryGroup = _str(j['library_group'], s.libraryGroup);
+    s.librarySort = _str(j['library_sort'], s.librarySort);
+    s.libraryHideFinished = _bool(j['library_hide_finished'], s.libraryHideFinished);
+    s.libraryFavoritesFirst = _bool(j['library_favorites_first'], s.libraryFavoritesFirst);
+    s.libraryShowStats = _bool(j['library_show_stats'], s.libraryShowStats);
+    s.readerMode = _str(j['reader_mode'], s.readerMode);
+    s.wordPopup = _str(j['word_popup'], s.wordPopup);
+    s.readerPaper = _str(j['reader_paper'], s.readerPaper);
+    s.letterSpacing = _dbl(j['letter_spacing'], s.letterSpacing);
+    s.boldText = _bool(j['bold_text'], s.boldText);
+    s.paragraphIndent = _bool(j['paragraph_indent'], s.paragraphIndent);
+    s.highlightStyle = _str(j['highlight_style'], s.highlightStyle);
+    s.highlightStrength = _dbl(j['highlight_strength'], s.highlightStrength);
+    s.keepAwake = _bool(j['keep_awake'], s.keepAwake);
+    s.showReaderProgress = _bool(j['reader_progress'], s.showReaderProgress);
+    s.hideChromeOnScroll = _bool(j['hide_chrome'], s.hideChromeOnScroll);
+    s.doubleTapKnown = _bool(j['double_tap_known'], s.doubleTapKnown);
+    s.showReaderHeader = _bool(j['reader_header'], s.showReaderHeader);
+    s.dimRead = _bool(j['dim_read'], s.dimRead);
+    s.fontByLanguage = _strMap(j['font_by_language']);
+    s.profileName = _str(j['profile_name']);
+    s.profileEmoji = _str(j['profile_emoji']);
+    s.profileHue = _int(j['profile_hue'], s.profileHue);
+    s.nativeLanguage = _str(j['native_language'], s.nativeLanguage);
+    s.learning = _strList(j['learning']);
+    s.activeLanguage = j['active_language'] as String?;
+    s.backupReminderDays = _int(j['backup_reminder_days'], s.backupReminderDays);
+    s.customFonts = (j['custom_fonts'] as List? ?? []).whereType<Map>().map((m) => CustomFont.fromJson(m.cast<String, dynamic>())).toList();
+    s.lastBackupAt = _date(j['last_backup_at']);
     return s;
   }
 
@@ -642,5 +746,44 @@ class Settings {
     'haptics': haptics,
     'reduce_motion': reduceMotion,
     'onboarded': onboarded,
+    'feel': feel,
+    'glass': glass,
+    'accent_hex': accentHex,
+    'roundness': roundness,
+    'ui_font': uiFont,
+    'start_tab': startTab,
+    'last_tab': lastTab,
+    'nav_style': navStyle,
+    'language_scope': languageScope,
+    'continue_card': showContinueCard,
+    'library_group': libraryGroup,
+    'library_sort': librarySort,
+    'library_hide_finished': libraryHideFinished,
+    'library_favorites_first': libraryFavoritesFirst,
+    'library_show_stats': libraryShowStats,
+    'reader_mode': readerMode,
+    'word_popup': wordPopup,
+    'reader_paper': readerPaper,
+    'letter_spacing': letterSpacing,
+    'bold_text': boldText,
+    'paragraph_indent': paragraphIndent,
+    'highlight_style': highlightStyle,
+    'highlight_strength': highlightStrength,
+    'keep_awake': keepAwake,
+    'reader_progress': showReaderProgress,
+    'hide_chrome': hideChromeOnScroll,
+    'double_tap_known': doubleTapKnown,
+    'reader_header': showReaderHeader,
+    'dim_read': dimRead,
+    'font_by_language': fontByLanguage,
+    'custom_fonts': customFonts.map((f) => f.toJson()).toList(),
+    'profile_name': profileName,
+    'profile_emoji': profileEmoji,
+    'profile_hue': profileHue,
+    'native_language': nativeLanguage,
+    'learning': learning,
+    'active_language': activeLanguage,
+    'last_backup_at': lastBackupAt?.toIso8601String(),
+    'backup_reminder_days': backupReminderDays,
   };
 }

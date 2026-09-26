@@ -13,6 +13,7 @@ dependencies:
   file_picker: ^13.1.0
   share_plus: ^13.3.0
   phosphoricons_flutter: ^1.0.0
+  wakelock_plus: ^1.8.0
 
 dev_dependencies:
   flutter_test:
@@ -31,6 +32,15 @@ flutter:
     - assets/fonts/OFL-frankruhllibre.txt
     - assets/fonts/OFL-notonaskharabic.txt
     - assets/fonts/OFL-amiri.txt
+    - assets/fonts/OFL-lexend.txt
+    - assets/fonts/OFL-andika.txt
+    - assets/fonts/OFL-opendyslexic.txt
+    - assets/fonts/OFL-heebo.txt
+    - assets/fonts/OFL-varelaround.txt
+    - assets/fonts/OFL-rubik.txt
+    - assets/fonts/OFL-vazirmatn.txt
+    - assets/fonts/OFL-notosansarabic.txt
+    - assets/fonts/OFL-baloobhaijaan2.txt
 
   fonts:
     - family: Nunito
@@ -88,4 +98,56 @@ flutter:
         - asset: assets/fonts/Amiri-400.ttf
           weight: 400
         - asset: assets/fonts/Amiri-700.ttf
+          weight: 700
+    - family: Lexend
+      fonts:
+        - asset: assets/fonts/Lexend-400.ttf
+          weight: 400
+        - asset: assets/fonts/Lexend-700.ttf
+          weight: 700
+    - family: Andika
+      fonts:
+        - asset: assets/fonts/Andika-400.ttf
+          weight: 400
+        - asset: assets/fonts/Andika-700.ttf
+          weight: 700
+    - family: OpenDyslexic
+      fonts:
+        - asset: assets/fonts/OpenDyslexic-400.otf
+          weight: 400
+        - asset: assets/fonts/OpenDyslexic-700.otf
+          weight: 700
+    - family: Heebo
+      fonts:
+        - asset: assets/fonts/Heebo-400.ttf
+          weight: 400
+        - asset: assets/fonts/Heebo-700.ttf
+          weight: 700
+    - family: VarelaRound
+      fonts:
+        - asset: assets/fonts/VarelaRound-400.ttf
+          weight: 400
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-400.ttf
+          weight: 400
+        - asset: assets/fonts/Rubik-700.ttf
+          weight: 700
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-400.ttf
+          weight: 400
+        - asset: assets/fonts/Vazirmatn-700.ttf
+          weight: 700
+    - family: NotoSansArabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansArabic-700.ttf
+          weight: 700
+    - family: BalooBhaijaan
+      fonts:
+        - asset: assets/fonts/BalooBhaijaan-400.ttf
+          weight: 400
+        - asset: assets/fonts/BalooBhaijaan-700.ttf
           weight: 700

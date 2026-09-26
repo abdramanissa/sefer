@@ -40,15 +40,25 @@ class _StatsScreenState extends State<StatsScreen> {
       _ => null,
     };
     final t = totals(app.activity, since: since);
+    // In "active language only" mode the totals are that language's alone.
+    if (app.scoped) {
+      final l = app.activeLanguage!;
+      t
+        ..seconds = t.langSeconds[l] ?? 0
+        ..words = t.langWords[l] ?? 0
+        ..known = app.knownCount(l)
+        ..saved = app.learningCount(l);
+      t.langSeconds.removeWhere((k, _) => k != l);
+    }
     final all = totals(app.activity);
     final best = bestStreak(app.activity, app.streakTest);
-    final langs = app.activeLanguages;
+    final langs = app.activeLanguages.where(app.inScope).toList();
     final finished = app.stories.where((x) => x.finishedAt != null).length;
 
     return PageScroll(
       id: 'stats',
       children: [
-        const TabHeader(kicker: 'Your reading', title: 'Stats', actions: [StreakPill(), SettingsAction()]),
+        const TabHeader(kicker: 'Your reading', title: 'Stats', actions: [LanguagePill(), StreakPill()]),
         const SizedBox(height: 20),
         // Today.
         SoftCard(
@@ -181,7 +191,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 metric: s.heatMetric,
                 goalMinutes: s.dailyGoalMinutes,
                 mondayFirst: s.weekStartsMonday,
-                language: _StatsState.heatLanguage,
+                language: app.scoped ? app.activeLanguage : _StatsState.heatLanguage,
                 onTapDay: (d) => _daySheet(context, d),
               ),
               const SizedBox(height: 12),

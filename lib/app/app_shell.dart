@@ -8,6 +8,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/app_state.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/feel.dart';
 import '../widgets/app_background.dart';
 import '../widgets/covers.dart';
 import '../widgets/glass.dart';
@@ -32,8 +33,11 @@ const _overlayLight = SystemUiOverlayStyle(
   systemNavigationBarIconBrightness: Brightness.dark,
 );
 
-/// Height the floating nav takes, so scrolling pages can pad their bottom.
-double navClearance(BuildContext context) => 116 + MediaQuery.viewPaddingOf(context).bottom;
+const _navHeight = 70.0;
+
+/// Height the nav takes, so scrolling pages can pad their bottom.
+double navClearance(BuildContext context) =>
+    _navHeight + 40 + MediaQuery.viewPaddingOf(context).bottom;
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key});
@@ -42,6 +46,7 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.app;
     final c = context.sc;
+    final feel = context.feel;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 60;
     final showNav = app.showNav && !keyboard;
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -57,7 +62,7 @@ class AppShell extends StatelessWidget {
           resizeToAvoidBottomInset: false,
           body: Stack(
             children: [
-              Positioned.fill(child: AppBackground(pattern: app.settings.background)),
+              Positioned.fill(child: AppBackground(pattern: feel.decor ? app.settings.background : 'none')),
               Positioned.fill(child: _ScreenSwitcher(route: app.route)),
               if (app.showNav)
                 Positioned(left: 0, right: 0, bottom: 0, child: _BottomFade(visible: showNav)),
@@ -100,7 +105,7 @@ class _ScreenSwitcher extends StatelessWidget {
       ),
       transitionBuilder: (child, animation) {
         final incoming = child.key == ValueKey(route);
-        return _RouteTransition(
+        return RouteTransition(
           animation: animation,
           incoming: incoming,
           style: s.transition,
@@ -110,7 +115,9 @@ class _ScreenSwitcher extends StatelessWidget {
           child: child,
         );
       },
-      child: KeyedSubtree(key: ValueKey(route), child: buildScreen(route)),
+      // Each page paints into its own layer, so moving or fading it during a
+      // transition doesn't repaint its contents every frame.
+      child: KeyedSubtree(key: ValueKey(route), child: RepaintBoundary(child: buildScreen(route))),
     );
   }
 }
@@ -118,8 +125,12 @@ class _ScreenSwitcher extends StatelessWidget {
 /// The "rack focus" move (DESIGN.md §8.4): the old page drifts back and out of
 /// focus while the new one comes into focus. Tabs move sideways, drilling in
 /// and out moves vertically. The style and strength come from settings.
-class _RouteTransition extends StatelessWidget {
-  const _RouteTransition({
+///
+/// The wrappers stay in place when the move ends (at identity values), so the
+/// page underneath is never torn down and rebuilt.
+class RouteTransition extends StatelessWidget {
+  const RouteTransition({
+    super.key,
     required this.animation,
     required this.incoming,
     required this.style,
@@ -143,11 +154,10 @@ class _RouteTransition extends StatelessWidget {
     child: child,
     builder: (context, child) {
       final v = animation.value;
-      if (v >= 1 && incoming) return child!;
       // p: 0 → 1 as this page becomes the visible one.
       final double p;
       if (incoming) {
-        p = Curves.easeOutCubic.transform(const Interval(0.25, 1).transform(v));
+        p = v >= 1 ? 1 : Curves.easeOutCubic.transform(const Interval(0.25, 1).transform(v));
       } else {
         // The outgoing animation runs 1 → 0; it leaves early.
         final q = const Interval(0, 0.7).transform(1 - v);
@@ -156,20 +166,18 @@ class _RouteTransition extends StatelessWidget {
       final away = 1 - p;
       final rtl = Directionality.of(context) == TextDirection.rtl;
       final dir = (rtl ? -side : side).toDouble();
-      Offset offset;
+      var offset = Offset.zero;
       double scale = 1;
       double sigma = 0;
       switch (style) {
         case 'fade':
-          offset = Offset.zero;
+          break;
         case 'slide':
-          final w = MediaQuery.sizeOf(context).width;
-          final h = MediaQuery.sizeOf(context).height;
+          final size = MediaQuery.sizeOf(context);
           offset = depth == 0
-              ? Offset((incoming ? dir : -dir) * w * 0.3 * away, 0)
-              : Offset(0, (incoming ? depth : -depth) * h * 0.08 * away);
+              ? Offset((incoming ? dir : -dir) * size.width * 0.3 * away, 0)
+              : Offset(0, (incoming ? depth : -depth) * size.height * 0.08 * away);
         case 'scale':
-          offset = Offset.zero;
           scale = incoming ? 1 + 0.06 * away : 1 - 0.06 * away;
         default: // blur
           offset = depth == 0
@@ -178,24 +186,27 @@ class _RouteTransition extends StatelessWidget {
           scale = incoming ? 1 + 0.03 * away : 1 - 0.04 * away;
           sigma = blur * away;
       }
-      Widget out = Opacity(opacity: p.clamp(0.0, 1.0), child: child);
-      if (scale != 1) out = Transform.scale(scale: scale, child: out);
-      if (offset != Offset.zero) out = Transform.translate(offset: offset, child: out);
-      if (sigma > 0.2) {
-        out = ImageFiltered(
+      return IgnorePointer(
+        ignoring: !incoming,
+        child: ImageFiltered(
+          enabled: sigma > 0.3,
           imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal),
-          child: out,
-        );
-      }
-      return IgnorePointer(ignoring: !incoming, child: out);
+          child: Transform(
+            transform: Matrix4.translationValues(offset.dx, offset.dy, 0)..scaleByDouble(scale, scale, 1, 1),
+            alignment: Alignment.center,
+            child: Opacity(opacity: p.clamp(0.0, 1.0), child: child),
+          ),
+        ),
+      );
     },
   );
 }
 
 // ------------------------------------------------------------------ edge fade
 
-/// Content fades and softens into the bottom edge behind the nav bar
-/// (DESIGN.md §5.4, the stacked-strip version).
+/// Content fades into the bottom edge behind the nav bar. A gradient only:
+/// stacked blur strips looked nice but re-blurred the page on every scroll
+/// frame.
 class _BottomFade extends StatelessWidget {
   const _BottomFade({required this.visible});
   final bool visible;
@@ -203,44 +214,22 @@ class _BottomFade extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.sc;
-    final h = 128 + MediaQuery.viewPaddingOf(context).bottom;
-    const strips = 4;
+    final h = 110 + MediaQuery.viewPaddingOf(context).bottom;
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1 : 0,
         duration: const Duration(milliseconds: 220),
         child: SizedBox(
           height: h,
-          child: Stack(
-            children: [
-              for (var i = 0; i < strips; i++)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: h * (strips - i) / strips,
-                  child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 1.5 + i * 1.2, sigmaY: 1.5 + i * 1.2),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      stops: const [0, 0.2, 0.4, 0.6, 0.8, 1],
-                      colors: [0.82, 0.62, 0.38, 0.17, 0.05, 0.0]
-                          .map((a) => c.bg.withValues(alpha: a))
-                          .toList(),
-                    ),
-                  ),
-                ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                stops: const [0, 0.25, 0.5, 0.75, 1],
+                colors: [0.9, 0.7, 0.4, 0.12, 0.0].map((a) => c.bg.withValues(alpha: a)).toList(),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -262,7 +251,7 @@ const tabMeta = <String, TabMeta>{
   'add': TabMeta('Add', PhosphorIconsRegular.plusCircle, PhosphorIconsFill.plusCircle),
   'words': TabMeta('Words', PhosphorIconsRegular.cards, PhosphorIconsFill.cards),
   'stats': TabMeta('Stats', PhosphorIconsRegular.chartBar, PhosphorIconsFill.chartBar),
-  'settings': TabMeta('Settings', PhosphorIconsRegular.gearSix, PhosphorIconsFill.gearSix),
+  'profile': TabMeta('Profile', PhosphorIconsRegular.userCircle, PhosphorIconsFill.userCircle),
 };
 
 class _NavBar extends StatefulWidget {
@@ -273,16 +262,13 @@ class _NavBar extends StatefulWidget {
 }
 
 class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
-  static const slot = 58.0;
-  static const fab = 64.0;
-
   late final AnimationController _move = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 460),
     value: 1,
   );
-  int _from = 0;
-  int _to = 0;
+  int _from = -1;
+  int _to = -1;
   int? _scrub;
   bool _lifted = false;
 
@@ -292,35 +278,16 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  List<String> get _tabs => context.appRead.visibleTabs;
-
-  /// Leading edge x of a tab slot, accounting for the centre button gap.
-  double _slotX(int i, int count, bool withFab) {
-    final half = count ~/ 2;
-    var x = i * slot;
-    if (withFab && i >= half) x += fab;
-    return x;
-  }
-
   void _animateTo(int i) {
-    if (i == _to && _move.isCompleted) return;
-    _from = _currentIndex();
-    _to = i;
-    if (Motion.reduced(context)) {
+    if (i == _to) return;
+    if (_to < 0 || Motion.reduced(context)) {
+      _from = _to = i;
       _move.value = 1;
-    } else {
-      _move.forward(from: 0);
+      return;
     }
-  }
-
-  int _currentIndex() => _move.value >= 1 ? _to : (_move.value < 0.5 ? _from : _to);
-
-  int? _indexAt(double dx, int count, bool withFab) {
-    for (var i = 0; i < count; i++) {
-      final x = _slotX(i, count, withFab);
-      if (dx >= x && dx < x + slot) return i;
-    }
-    return null;
+    _from = _move.value < 0.5 ? _from : _to;
+    _to = i;
+    _move.forward(from: 0);
   }
 
   void _openTab(String tab) {
@@ -333,111 +300,142 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final app = context.app;
     final c = context.sc;
+    final feel = context.feel;
     final s = app.settings;
-    final tabs = _tabs;
+    final tabs = app.visibleTabs;
     final withFab = s.showCenterButton;
-    final width = tabs.length * slot + (withFab ? fab : 0);
+    final docked = s.navStyle == 'docked';
+    final bottom = MediaQuery.viewPaddingOf(context).bottom;
+    final screen = MediaQuery.sizeOf(context).width;
+
+    // The bar spans the screen (up to a comfortable maximum) and every slot
+    // shares the width, so adding or removing tabs or the centre button
+    // re-spaces everything instead of crowding it.
+    const margin = 14.0;
+    final outer = docked ? screen : min(screen - margin * 2, 520.0);
+    const pad = 8.0;
+    final fabW = withFab ? 76.0 : 0.0;
+    final slot = (outer - pad * 2 - fabW) / max(1, tabs.length);
+    final half = (tabs.length + 1) ~/ 2;
+    double slotX(int i) => i * slot + (withFab && i >= half ? fabW : 0);
+    int? indexAt(double dx) {
+      for (var i = 0; i < tabs.length; i++) {
+        final x = slotX(i);
+        if (dx >= x && dx < x + slot) return i;
+      }
+      return null;
+    }
+
     final selected = tabs.indexOf(app.lastTab);
     final target = _scrub ?? selected;
     if (target >= 0 && target != _to) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _animateTo(target);
-      });
+      if (_to < 0) {
+        _from = _to = target;
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _animateTo(target);
+        });
+      }
     }
-    final bottom = MediaQuery.viewPaddingOf(context).bottom;
-    const height = 74.0;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(18, 0, 18, 18 + bottom),
-      child: Center(
-        heightFactor: 1,
-        child: Semantics(
-          container: true,
-          label: 'Navigation',
-          child: GlassSurface(
-            radius: 28,
-            sigma: 16,
-            child: SizedBox(
-              height: height,
-              width: width + 16,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragStart: (d) {
-                  final i = _indexAt(d.localPosition.dx - 8, tabs.length, withFab);
-                  if (i == null) return;
-                  setState(() {
-                    _lifted = true;
-                    _scrub = i;
-                  });
-                },
-                onHorizontalDragUpdate: (d) {
-                  if (!_lifted) return;
-                  final i = _indexAt(d.localPosition.dx - 8, tabs.length, withFab);
-                  if (i != null && i != _scrub) {
-                    Haptic.selection();
-                    setState(() => _scrub = i);
-                  }
-                },
-                onHorizontalDragEnd: (_) {
-                  if (!_lifted) return;
-                  final i = _scrub;
-                  setState(() {
-                    _lifted = false;
-                    _scrub = null;
-                  });
-                  if (i != null) _openTab(tabs[i]);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Directionality(
-                    // Always LTR so the centre button and muscle memory hold.
-                    textDirection: TextDirection.ltr,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        if (selected >= 0 || _scrub != null)
-                          AnimatedBuilder(
-                            animation: _move,
-                            builder: (context, _) => _pill(c, tabs.length, withFab, height),
-                          ),
-                        for (var i = 0; i < tabs.length; i++)
-                          Positioned(
-                            left: _slotX(i, tabs.length, withFab),
-                            top: 0,
-                            bottom: 0,
-                            width: slot,
-                            child: _NavItem(
-                              meta: tabMeta[tabs[i]]!,
-                              selected: (_scrub ?? selected) == i,
-                              lifted: _lifted && _scrub == i,
-                              showLabel: s.showLabels,
-                              onTap: () => _openTab(tabs[i]),
-                            ),
-                          ),
-                        if (withFab)
-                          Positioned(
-                            left: _slotX(tabs.length ~/ 2, tabs.length, false),
-                            width: fab,
-                            top: 0,
-                            bottom: 0,
-                            child: const Center(child: _ContinueButton()),
-                          ),
-                      ],
+    final bar = SizedBox(
+      height: _navHeight,
+      width: outer,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (d) {
+          final i = indexAt(d.localPosition.dx - pad);
+          if (i == null) return;
+          setState(() {
+            _lifted = true;
+            _scrub = i;
+          });
+        },
+        onHorizontalDragUpdate: (d) {
+          if (!_lifted) return;
+          final i = indexAt(d.localPosition.dx - pad);
+          if (i != null && i != _scrub) {
+            Haptic.selection();
+            setState(() => _scrub = i);
+          }
+        },
+        onHorizontalDragEnd: (_) {
+          if (!_lifted) return;
+          final i = _scrub;
+          setState(() {
+            _lifted = false;
+            _scrub = null;
+          });
+          if (i != null) _openTab(tabs[i]);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: pad),
+          child: Directionality(
+            // Always LTR so the centre button and muscle memory hold.
+            textDirection: TextDirection.ltr,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (_to >= 0 && _to < tabs.length)
+                  AnimatedBuilder(
+                    animation: _move,
+                    builder: (context, _) => _pill(c, feel, slotX, slot),
+                  ),
+                for (var i = 0; i < tabs.length; i++)
+                  Positioned(
+                    left: slotX(i),
+                    top: 0,
+                    bottom: 0,
+                    width: slot,
+                    child: _NavItem(
+                      meta: tabMeta[tabs[i]]!,
+                      selected: (_scrub ?? selected) == i,
+                      lifted: _lifted && _scrub == i,
+                      showLabel: s.showLabels,
+                      onTap: () => _openTab(tabs[i]),
                     ),
                   ),
-                ),
-              ),
+                if (withFab)
+                  Positioned(
+                    left: half * slot,
+                    width: fabW,
+                    top: 0,
+                    bottom: 0,
+                    child: const Center(child: _ContinueButton()),
+                  ),
+              ],
             ),
           ),
         ),
       ),
     );
+
+    return Semantics(
+      container: true,
+      label: 'Navigation',
+      child: docked
+          ? GlassSurface(
+              radius: 0,
+              sigma: 16,
+              shadow: false,
+              enabled: s.glass,
+              child: Padding(padding: EdgeInsets.only(bottom: bottom), child: Center(heightFactor: 1, child: bar)),
+            )
+          : Padding(
+              padding: EdgeInsets.fromLTRB(margin, 0, margin, 14 + bottom),
+              child: Center(
+                heightFactor: 1,
+                child: GlassSurface(radius: feel.r(28), sigma: 16, enabled: s.glass, child: bar),
+              ),
+            ),
+    );
   }
 
-  Widget _pill(SeferColors c, int count, bool withFab, double height) {
+  Widget _pill(SeferColors c, Feel feel, double Function(int) slotX, double slot) {
+    const height = _navHeight;
     final t = _move.value;
-    final fromX = _slotX(_from.clamp(0, count - 1), count, withFab);
-    final toX = _slotX(_to.clamp(0, count - 1), count, withFab);
+    final fromX = slotX(_from.clamp(0, 99));
+    final toX = slotX(_to);
     final forward = toX >= fromX;
     // The leading edge moves first and the trailing edge catches up, so the
     // pill stretches like a droplet (DESIGN.md §8.5).
@@ -447,11 +445,12 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     final right = lerpDouble(fromX + slot, toX + slot, forward ? lead : trail)!;
     final squash = 1 - 0.14 * sin(pi * t) * ((toX - fromX).abs() > 0 ? 1 : 0);
     final grow = _lifted ? 6.0 : 0.0;
-    final pillH = (height - 18) * squash;
+    final pillH = (height - 16) * squash;
     final alpha = (c.isDark ? 0.10 : 0.07) * (_lifted ? 2.4 : 1);
+    final inset = max(4.0, (slot - 76) / 2);
     return Positioned(
-      left: left + 4 - grow,
-      width: right - left - 8 + grow * 2,
+      left: left + inset - grow,
+      width: max(0, right - left - inset * 2 + grow * 2),
       top: (height - pillH) / 2,
       height: pillH,
       child: AnimatedContainer(
@@ -459,7 +458,7 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
         curve: const Cubic(0.3, 1.25, 0.5, 1),
         decoration: BoxDecoration(
           color: c.text.withValues(alpha: alpha),
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.circular(feel.pill(pillH)),
           border: _lifted ? Border.all(color: Colors.white.withValues(alpha: 0.16)) : null,
           boxShadow: _lifted
               ? [BoxShadow(color: Colors.black.withValues(alpha: 0.28), blurRadius: 22, offset: const Offset(0, 8))]
@@ -509,17 +508,17 @@ class _NavItem extends StatelessWidget {
               TweenAnimationBuilder<Color?>(
                 tween: ColorTween(end: color),
                 duration: const Duration(milliseconds: 300),
-                builder: (_, col, _) => Icon(selected ? meta.iconSelected : meta.icon, size: 22, color: col),
+                builder: (_, col, _) => Icon(selected ? meta.iconSelected : meta.icon, size: 23, color: col),
               ),
               if (showLabel) ...[
                 const SizedBox(height: 4),
-                SizedBox(
-                  width: 54,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 300),
-                      style: AppTheme.s(9.5, weight: FontWeight.w600, color: color),
+                      style: AppTheme.s(10, weight: FontWeight.w600, color: color),
                       child: Text(meta.label, maxLines: 1),
                     ),
                   ),

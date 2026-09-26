@@ -134,18 +134,24 @@ class _RollingTextState extends State<RollingText> with SingleTickerProviderStat
     super.dispose();
   }
 
+  static final Map<(TextStyle, double), double> _digitWidths = {};
+
+  /// The widest digit for this style and text scale, measured once.
   double _digitWidth(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
-    var w = 0.0;
-    for (var d = 0; d < 10; d++) {
-      final tp = TextPainter(
-        text: TextSpan(text: '$d', style: widget.style),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout();
-      if (tp.width > w) w = tp.width;
-    }
-    return w;
+    return _digitWidths.putIfAbsent((widget.style, scaler.scale(100)), () {
+      var w = 0.0;
+      for (var d = 0; d < 10; d++) {
+        final tp = TextPainter(
+          text: TextSpan(text: '$d', style: widget.style),
+          textDirection: TextDirection.ltr,
+          textScaler: scaler,
+        )..layout();
+        if (tp.width > w) w = tp.width;
+        tp.dispose();
+      }
+      return w;
+    });
   }
 
   @override

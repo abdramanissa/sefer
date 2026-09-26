@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/feel.dart';
 
 // ------------------------------------------------------------------ helpers
 
@@ -135,7 +136,7 @@ class PrimaryButton extends StatelessWidget {
             height: height,
             decoration: BoxDecoration(
               color: color ?? c.ember,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.circular(context.feel.pill(46)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 22),
             alignment: Alignment.center,
@@ -194,7 +195,7 @@ class GhostButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
               color: c.bgRaised2,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.circular(context.feel.pill(46)),
             ),
             child: Row(
               mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -262,7 +263,7 @@ class Pill extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: dense ? 11 : 14, vertical: dense ? 6 : 8),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(context.feel.pill(46)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -342,7 +343,7 @@ class SoftCard extends StatelessWidget {
   const SoftCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding,
     this.radius = 20,
     this.color,
     this.borderColor,
@@ -350,7 +351,7 @@ class SoftCard extends StatelessWidget {
   });
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
   final double radius;
   final Color? color;
   final Color? borderColor;
@@ -360,10 +361,10 @@ class SoftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.sc;
     final box = Container(
-      padding: padding,
+      padding: padding ?? EdgeInsets.all(context.feel.cardPad),
       decoration: BoxDecoration(
         color: color ?? c.bgRaised,
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: BorderRadius.circular(context.feel.r(radius)),
         border: Border.all(color: borderColor ?? c.border.withValues(alpha: 0.6)),
       ),
       child: child,
@@ -468,27 +469,29 @@ class TabHeader extends StatelessWidget {
   final List<Widget> actions;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.end,
-    children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final feel = context.feel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (feel.kickers && kicker.isNotEmpty) ...[Kicker(kicker), const SizedBox(height: 4)],
+        // Actions sit on the title's line, centred on it.
+        Row(
           children: [
-            Kicker(kicker),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.f(28, weight: FontWeight.w800, color: context.sc.text),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.f(feel.titleSize, weight: FontWeight.w800, color: context.sc.text),
+              ),
             ),
+            ...actions,
           ],
         ),
-      ),
-      ...actions,
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class SectionHeading extends StatelessWidget {
@@ -554,7 +557,7 @@ class TinySwitch extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: value ? c.ember : c.bgRaised2,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.circular(context.feel.pill(46)),
               border: Border.all(color: value ? c.ember : c.border),
             ),
             child: AnimatedAlign(
@@ -610,7 +613,7 @@ class SegToggle<T> extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: sel ? c.ember : Colors.transparent,
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(context.feel.pill(46)),
           ),
           child: Text(
             e.value,
@@ -626,7 +629,7 @@ class SegToggle<T> extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(100)),
+      decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(context.feel.pill(46))),
       child: Row(
         mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
         children: options.entries.map(seg).toList(),
@@ -723,7 +726,7 @@ class _SearchFieldState extends State<SearchField> {
     return Container(
       height: 48,
       padding: const EdgeInsetsDirectional.only(start: 16, end: 8),
-      decoration: BoxDecoration(color: c.bgRaised, borderRadius: BorderRadius.circular(100)),
+      decoration: BoxDecoration(color: c.bgRaised, borderRadius: BorderRadius.circular(context.feel.pill(46))),
       child: Row(
         children: [
           Icon(PhosphorIconsRegular.magnifyingGlass, size: 16, color: c.textTertiary),
@@ -860,7 +863,7 @@ class ToolGroup extends StatelessWidget {
       items.add(children[i]);
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
+      borderRadius: BorderRadius.circular(context.feel.r(radius)),
       child: ColoredBox(
         color: color ?? c.bgRaised,
         child: Column(mainAxisSize: MainAxisSize.min, children: items),
@@ -880,7 +883,7 @@ class ToolRow extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.danger = false,
-    this.minHeight = 52,
+    this.minHeight,
   });
 
   final IconData? icon;
@@ -890,7 +893,7 @@ class ToolRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final bool danger;
-  final double minHeight;
+  final double? minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -898,7 +901,7 @@ class ToolRow extends StatelessWidget {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final color = danger ? c.danger : c.text;
     final row = ConstrainedBox(
-      constraints: BoxConstraints(minHeight: minHeight),
+      constraints: BoxConstraints(minHeight: minHeight ?? context.feel.rowHeight),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(

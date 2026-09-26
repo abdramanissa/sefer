@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app/app.dart';
 import 'data/app_state.dart';
+import 'data/fonts.dart';
 import 'data/store.dart';
 
 const _fontLicenses = {
@@ -18,6 +19,15 @@ const _fontLicenses = {
   'Frank Ruhl Libre': 'frankruhllibre',
   'Noto Naskh Arabic': 'notonaskharabic',
   'Amiri': 'amiri',
+  'Lexend': 'lexend',
+  'Andika': 'andika',
+  'OpenDyslexic': 'opendyslexic',
+  'Heebo': 'heebo',
+  'Varela Round': 'varelaround',
+  'Rubik': 'rubik',
+  'Vazirmatn': 'vazirmatn',
+  'Noto Sans Arabic': 'notosansarabic',
+  'Baloo Bhaijaan 2': 'baloobhaijaan2',
 };
 
 Future<void> main() async {
@@ -35,5 +45,6 @@ Future<void> main() async {
   await dir.create(recursive: true);
   final state = AppState(FileStore(dir));
   await state.load();
+  await UserFonts.loadAll(state);
   runApp(SeferApp(state: state));
 }

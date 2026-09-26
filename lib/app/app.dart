@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/feel.dart';
 import '../widgets/ui_kit.dart';
 import 'app_shell.dart';
 
@@ -36,6 +38,34 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
   @override
   void didChangePlatformBrightness() => setState(() {});
 
+  // Building ThemeData is cheap, but a new instance makes every widget that
+  // reads the theme rebuild. Most state changes (a word tapped, a tick of
+  // reading time) don't touch the theme, so keep the same instance until one
+  // of its inputs changes.
+  String? _themeKey;
+  ThemeData? _theme;
+
+  ThemeData _themeFor(AppState app, Brightness platform) {
+    final s = app.settings;
+    var palette = app.paletteFor(platform);
+    final accent = hexToColor(s.accentHex);
+    final key = [
+      s.themeMode,
+      s.customThemeId,
+      palette.brightness,
+      for (final c in palette.editable.values) c.toARGB32(),
+      s.accentHex,
+      s.uiFont,
+    ].join('|');
+    if (key == _themeKey && _theme != null) return _theme!;
+    if (accent != null) {
+      palette = SeferColors.fromBase(palette.brightness, {...palette.editable, 'accent': accent});
+    }
+    AppTheme.uiFamily = uiFontFamily(s.uiFont);
+    _themeKey = key;
+    return _theme = AppTheme.build(palette);
+  }
+
   @override
   Widget build(BuildContext context) => AppScope(
     state: widget.state,
@@ -46,11 +76,10 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
         Haptic.enabled = s.haptics;
         Motion.forceReduce = s.reduceMotion;
         final platform = View.of(context).platformDispatcher.platformBrightness;
-        final palette = app.paletteFor(platform);
         return MaterialApp(
           title: 'Sefer',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.build(palette),
+          theme: _themeFor(app, platform),
           themeAnimationDuration: const Duration(milliseconds: 380),
           themeAnimationCurve: Curves.easeOutCubic,
           builder: (context, child) {
@@ -59,7 +88,7 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
               data: mq.copyWith(
                 textScaler: _ScaledTextScaler(mq.textScaler, s.uiScale),
               ),
-              child: child!,
+              child: FeelScope(feel: Feel.byId(s.feel), roundness: s.roundness, child: child!),
             );
           },
           home: const AppShell(),
