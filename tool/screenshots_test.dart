@@ -59,6 +59,13 @@ const _greek = '''
        "glosses": {"είμαι": "I am", "πολύ": "very", "καλά": "well", "ευχαριστώ": "thank you"}},
       {"text": "Ο καφές είναι έτοιμος στην κουζίνα.", "translation": "The coffee is ready in the kitchen."}
     ]}
+  ],
+  "quiz": [
+    {"question": "Πού είναι ο καφές;", "translation": "Where is the coffee?",
+     "options": ["Στην κουζίνα", "Στο σαλόνι", "Στον κήπο"], "answer": "Στην κουζίνα",
+     "explanation": "«Ο καφές είναι έτοιμος στην κουζίνα.»"},
+    {"question": "Είναι ο καφές έτοιμος;", "translation": "Is the coffee ready?", "type": "yes_no", "answer": true},
+    {"question": "Ο ομιλητής είναι άρρωστος.", "translation": "The speaker is ill.", "type": "true_false", "answer": false}
   ]
 }''';
 
@@ -252,6 +259,105 @@ void main() {
     app.saveTheme(th);
     await shot(t, app, 'theme_editor', then: () async {
       app.go('theme:${th.id}');
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('reader pages', (t) async {
+    final app = await _seed();
+    app.settings.readerLayout = 'pages';
+    final long = List.generate(12, (i) => 'Mi abuela tiene un jardín pequeño detrás de su casa. Cada mañana sale con una taza de café y mira las flores. Dice que las plantas escuchan, por eso les habla en voz baja.').join('\n\n');
+    app.addStories(importText('El jardín\n$long', plain: const PlainTextOptions(language: 'es')).stories);
+    await shot(t, app, 'reader_pages', then: () async {
+      app.openStory(app.stories.firstWhere((s) => s.title == 'El jardín'));
+      await t.pumpAndSettle();
+      await t.tapAt(const Offset(380, 420));
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('quiz question', (t) async {
+    final app = await _seed();
+    await shot(t, app, 'quiz_question', then: () async {
+      app.go('quiz:${app.stories.firstWhere((s) => s.quiz.isNotEmpty).id}');
+      await t.pumpAndSettle();
+      await t.tap(find.text('Στο σαλόνι'));
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('quiz result', (t) async {
+    final app = await _seed();
+    await shot(t, app, 'quiz_result', then: () async {
+      app.go('quiz:${app.stories.firstWhere((s) => s.quiz.isNotEmpty).id}');
+      await t.pumpAndSettle();
+      await t.tap(find.text('Στην κουζίνα'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Next question'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Yes'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Next question'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('True'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('See my score'));
+      await t.pumpAndSettle(const Duration(seconds: 2));
+    });
+  });
+
+  testWidgets('generate', (t) async {
+    final app = await _seed();
+    app.settings
+      ..internet = true
+      ..geminiKey = 'x'
+      ..gen.language = 'el'
+      ..gen.topic = 'Food';
+    await shot(t, app, 'generate', then: () async {
+      app.go('add');
+      await t.pumpAndSettle();
+      await t.tap(find.text('Generate').first);
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('settings ai', (t) async {
+    final app = await _seed();
+    app.settings.internet = true;
+    await shot(t, app, 'settings_ai', then: () async {
+      app.go('settings:ai');
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('appearance themes', (t) async {
+    final app = await _seed();
+    await shot(t, app, 'appearance_themes', then: () async {
+      app.go('settings:appearance');
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.text('Gruvbox'), 300, scrollable: find.byType(Scrollable).first);
+      await Scrollable.ensureVisible(t.element(find.text('Gruvbox')), alignment: 0.3);
+      await t.pumpAndSettle();
+    });
+  });
+
+  for (final th in ['gruvbox', 'owl', 'catppuccin', 'owl-night']) {
+    testWidgets('theme $th', (t) async {
+      final app = await _seed();
+      app.settings.themeMode = th;
+      app.settings.navStyle = {'gruvbox': 'bubble', 'owl': 'line', 'catppuccin': 'island', 'owl-night': 'bubble'}[th]!;
+      await shot(t, app, 'theme_$th');
+    });
+  }
+
+  testWidgets('dock styles', (t) async {
+    final app = await _seed();
+    app.settings.navStyle = 'bubble';
+    await shot(t, app, 'dock_styles', then: () async {
+      app.go('settings:layout');
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.text('Island'), 300, scrollable: find.byType(Scrollable).first);
+      await Scrollable.ensureVisible(t.element(find.text('Island')), alignment: 0.4);
       await t.pumpAndSettle();
     });
   });

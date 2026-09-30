@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sefer/app/app.dart';
+import 'package:sefer/data/ai.dart';
 import 'package:sefer/data/app_state.dart';
 import 'package:sefer/data/importer.dart';
 import 'package:sefer/data/models.dart';
 import 'package:sefer/data/store.dart';
 import 'package:sefer/screens/word_card.dart';
+import 'package:sefer/widgets/ui_kit.dart';
 import 'package:sefer/screens/word_sheet.dart';
 import 'package:sefer/widgets/word_text.dart';
 
@@ -65,6 +69,12 @@ Future<void> _go(WidgetTester tester, AppState app, String route) async {
 RenderWordText _paragraph(WidgetTester tester) =>
     tester.renderObject<RenderWordText>(find.byType(WordText).first);
 
+/// Scrolls [finder] to the middle of the screen, clear of the nav bar.
+Future<void> _centre(WidgetTester tester, Finder finder) async {
+  await Scrollable.ensureVisible(tester.element(finder), alignment: 0.5);
+  await tester.pumpAndSettle();
+}
+
 /// Removes the app so periodic timers (the reader's clock) are cancelled.
 Future<void> _unmount(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox());
@@ -100,6 +110,7 @@ void main() {
       'profile',
       'settings:motion',
       'settings:about',
+      'settings:ai',
       'story:${story.id}',
     ]) {
       await _go(tester, app, r);
@@ -259,8 +270,7 @@ void main() {
     await _go(tester, app, 'settings:appearance');
     final page = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(find.text('Create a theme'), 300, scrollable: page);
-    await tester.drag(page, const Offset(0, -250));
-    await tester.pumpAndSettle();
+    await _centre(tester, find.text('Create a theme'));
     await tester.tap(find.text('Create a theme'));
     await tester.pumpAndSettle();
     expect(app.routeName, 'theme');
@@ -268,6 +278,153 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.settings.themeMode, 'custom');
     expect(app.settings.customThemes, hasLength(1));
+    await _unmount(tester);
+  });
+
+  testWidgets('pages layout turns pages and keeps your place', (tester) async {
+    final app = await _state(withStories: false);
+    final long = List.generate(30, (i) => 'Mi abuela tiene un jardín pequeño detrás de su casa número $i. Cada mañana sale con una taza de café y mira las flores.').join('\n\n');
+    app.addStories(importText(long, plain: const PlainTextOptions(title: 'Largo', language: 'es')).stories);
+    app.settings.readerLayout = 'pages';
+    await _pump(tester, app);
+    final s = app.stories.single;
+    app.openStory(s);
+    await tester.pumpAndSettle();
+    expect(find.byType(PageView), findsOneWidget);
+    expect(find.textContaining('1 / '), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // Tap the right edge: next page.
+    await tester.tapAt(const Offset(380, 420));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 / '), findsOneWidget);
+    expect(s.position, greaterThan(0));
+    // Swipe on to the next.
+    await tester.fling(find.byType(PageView), const Offset(-300, 0), 1500);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('3 / '), findsOneWidget);
+    final kept = s.position;
+    // Switching back to scrolling keeps the place.
+    app.updateSettings((x) => x.readerLayout = 'scroll');
+    await tester.pumpAndSettle();
+    expect(find.byType(PageView), findsNothing);
+    expect(s.position, kept);
+    await _unmount(tester);
+  });
+
+  testWidgets('quiz: answer, see the score, best is saved', (tester) async {
+    final app = await _state(withStories: false);
+    app.addStories(importText(jsonEncode({
+      'title': 'Quiz',
+      'language': 'es',
+      'paragraphs': ['El gato duerme.'],
+      'quiz': [
+        {'question': '¿Duerme el gato?', 'type': 'yes_no', 'answer': true},
+        {'question': '¿Corre el gato?', 'type': 'yes_no', 'answer': false, 'explanation': 'Duerme.'},
+      ],
+    })).stories);
+    await _pump(tester, app);
+    final s = app.stories.single;
+    await _go(tester, app, 'quiz:${s.id}');
+    expect(app.showNav, isFalse);
+    await tester.tap(find.text('Yes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Correct'), findsOneWidget);
+    await tester.tap(find.text('Next question'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Not quite'), findsOneWidget);
+    expect(find.text('Duerme.'), findsOneWidget);
+    await tester.tap(find.text('See my score'));
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(find.text('1 of 2 right'), findsOneWidget);
+    expect(find.text('Getting there'), findsOneWidget);
+    expect(s.quizBest, 50);
+    expect(app.today.quizzes, 1);
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    expect(find.text('You said'), findsOneWidget);
+    await _unmount(tester);
+  });
+
+  testWidgets('generator: builds a prompt, calls the model, reviews the answer', (tester) async {
+    final app = await _state(withStories: false);
+    app.settings
+      ..internet = true
+      ..geminiKey = 'test-key';
+    String? sent;
+    AiClient.debugTransport = (method, url, headers, body) async {
+      sent = body;
+      return (
+        200,
+        jsonEncode({
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {
+                    'text': jsonEncode([
+                      {
+                        'title': 'El mercado',
+                        'language': 'es',
+                        'paragraphs': [
+                          {'sentences': [{'text': 'Voy al mercado.', 'translation': 'I go to the market.'}]},
+                        ],
+                        'quiz': [
+                          {'question': '¿Adónde voy?', 'options': ['Al mercado', 'A casa'], 'answer': 'Al mercado'},
+                        ],
+                      },
+                    ]),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+    };
+    addTearDown(() => AiClient.debugTransport = null);
+    await _pump(tester, app);
+    await _go(tester, app, 'add');
+    await tester.tap(find.text('Generate').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('B1'));
+    await tester.pumpAndSettle();
+    expect(app.settings.gen.level, 'B1');
+    final page = find.byType(Scrollable).first;
+    final button = find.widgetWithText(PrimaryButton, 'Generate');
+    await tester.scrollUntilVisible(button, 300, scrollable: page);
+    await tester.drag(page, const Offset(0, -250));
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(sent, contains('CEFR level B1'));
+    expect(find.text('Ready to add'), findsOneWidget);
+    expect(find.text('1-question quiz'), findsOneWidget);
+    await _unmount(tester);
+  });
+
+  testWidgets('generator is blocked while internet is off', (tester) async {
+    final app = await _state(withStories: false);
+    var called = false;
+    AiClient.debugTransport = (_, _, _, _) async {
+      called = true;
+      return (200, '{}');
+    };
+    addTearDown(() => AiClient.debugTransport = null);
+    await _pump(tester, app);
+    await _go(tester, app, 'add');
+    await tester.tap(find.text('Generate').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Internet is off'), findsOneWidget);
+    final button = find.widgetWithText(PrimaryButton, 'Generate');
+    final page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(button, 300, scrollable: page);
+    await tester.drag(page, const Offset(0, -250));
+    await tester.pumpAndSettle();
+    await tester.tap(button, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(called, isFalse);
     await _unmount(tester);
   });
 }

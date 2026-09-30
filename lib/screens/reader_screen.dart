@@ -117,6 +117,15 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
 
   static const _barHeight = 64.0;
 
+  // Pages layout.
+  PageController? _pager;
+  List<_Page> _pages = const [];
+  Object? _pagesKey;
+  final _page = ValueNotifier(0);
+  // Pages are counted during layout; the indicator learns the count after.
+  final _pageCount = ValueNotifier(0);
+  String _layout = '';
+
   @override
   void initState() {
     super.initState();
@@ -192,6 +201,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     _progress.dispose();
     _position.dispose();
     _picked.dispose();
+    _pager?.dispose();
+    _page.dispose();
+    _pageCount.dispose();
     super.dispose();
   }
 
@@ -268,6 +280,118 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     await showSentenceSheet(context, s, sentence);
   }
 
+  // ------------------------------------------------------------ pages
+
+  void _turn(bool forward) {
+    final p = _pager;
+    if (p == null || !p.hasClients) return;
+    _touch();
+    Haptic.selection();
+    final target = (p.page?.round() ?? 0) + (forward ? 1 : -1);
+    if (target < 0 || target >= _pages.length) return;
+    if (Motion.reduced(context)) {
+      p.jumpToPage(target);
+    } else {
+      p.animateToPage(target, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+    }
+  }
+
+  int _pageOf(int paragraph) {
+    for (var i = 0; i < _pages.length; i++) {
+      if (_pages[i].chunks.any((c) => c.p >= paragraph)) return i;
+    }
+    return max(0, _pages.length - 1);
+  }
+
+  void _onPage(Story s, int i) {
+    _touch();
+    _picked.value = null;
+    _page.value = i;
+    if (i >= _pages.length) return;
+    final n = s.paragraphs.length;
+    final page = _pages[i];
+    final contentPages = _pages.where((p) => !p.footer).length;
+    final atEnd = page.footer || i >= contentPages - 1;
+    final first = page.chunks.isEmpty ? n : page.chunks.first.p;
+    final progress = atEnd ? 1.0 : first / max(1, n);
+    _position.value = min(first, max(0, n - 1));
+    _progress.value = progress;
+    _app!.updatePosition(s, atEnd ? n : first, progress);
+  }
+
+  Widget _pagedBody(Story s, Settings set, TextDirection dir, double width, double top, Widget Function(int, {int from, int? to, bool tracked}) para) {
+    final bottom = MediaQuery.viewPaddingOf(context).bottom;
+    final scaler = MediaQuery.textScalerOf(context);
+    final topPad = top + _barHeight + 18;
+    final bottomPad = bottom + 44;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final avail = box.maxHeight - topPad - bottomPad;
+        final key = Object.hashAll([
+          width, avail, scaler.scale(100), s.updatedAt, set.fontSize, set.lineHeight, set.wordSpacing, //
+          set.letterSpacing, set.paragraphSpacing, set.sidePadding, set.readerFont, set.fontByLanguage[s.language],
+          set.translit, set.showMarks, set.boldText, set.paragraphIndent, set.sentenceTranslations,
+          set.showReaderHeader, _openTranslations.join(','),
+        ]);
+        if (key != _pagesKey) {
+          final keep = _pages.isEmpty ? _anchor : _position.value;
+          _pages = _paginate(s, set, dir, width - set.sidePadding * 2, avail, scaler);
+          _pagesKey = key;
+          final target = _pageOf(keep);
+          final count = _pages.where((p) => !p.footer).length;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _pageCount.value = count;
+          });
+          if (_pager == null) {
+            _pager = PageController(initialPage: target);
+            _page.value = target;
+          } else if (_pager!.hasClients) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_pager?.hasClients ?? false) _pager!.jumpToPage(target);
+            });
+          }
+        }
+        return NotificationListener<ScrollNotification>(
+          onNotification: (_) {
+            _touch();
+            return false;
+          },
+          child: PageView.builder(
+            controller: _pager,
+            reverse: dir == TextDirection.rtl,
+            itemCount: _pages.length,
+            onPageChanged: (i) => _onPage(s, i),
+            itemBuilder: (context, i) {
+              final page = _pages[i];
+              if (page.footer) {
+                return SingleChildScrollView(
+                  padding: EdgeInsets.only(top: topPad),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: avail),
+                    child: Center(child: _Footer(story: s, width: width)),
+                  ),
+                );
+              }
+              return RepaintBoundary(
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.only(top: page.header ? 0 : topPad, bottom: bottomPad),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (page.header) _Header(story: s, dir: dir, paper: ReaderPaper.byId(set.readerPaper), width: width, topPad: topPad),
+                      for (final c in page.chunks) para(c.p, from: c.from, to: c.to, tracked: false),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.app;
@@ -295,12 +419,14 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     final n = s.paragraphs.length;
     _anchor = _anchor.clamp(0, n == 0 ? 0 : n - 1);
 
-    Widget para(int i) {
-      final key = _keys.putIfAbsent(i, GlobalKey.new);
+    Widget para(int i, {int from = 0, int? to, bool tracked = true}) {
+      final key = tracked ? _keys.putIfAbsent(i, GlobalKey.new) : null;
       Widget child = _ParagraphView(
         dir: dir,
         story: s,
         index: i,
+        from: from,
+        to: to,
         paper: paper,
         picked: _picked,
         showTranslations: set.sentenceTranslations == 'below' || _openTranslations.contains(i),
@@ -335,6 +461,19 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
       );
     }
 
+    final paged = set.readerLayout == 'pages';
+    if (_layout != set.readerLayout) {
+      // Switching layout keeps your place.
+      if (_layout.isNotEmpty) {
+        _anchor = _position.value.clamp(0, n == 0 ? 0 : n - 1);
+        _pager?.dispose();
+        _pager = null;
+        _pagesKey = null;
+        if (!paged) WidgetsBinding.instance.addPostFrameCallback((_) => _initialJump());
+      }
+      _layout = set.readerLayout;
+    }
+
     final paperColors = paper.palette(c);
     final page = AnnotatedRegion<SystemUiOverlayStyle>(
       value: ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
@@ -347,14 +486,24 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onTap: () {
+                onTapUp: (d) {
                   if (_picked.value != null) {
                     _picked.value = null;
-                  } else {
-                    _chrome.value = !_chrome.value;
+                    return;
                   }
+                  // In pages, the outer fifths of the screen turn the page.
+                  final w = MediaQuery.sizeOf(context).width;
+                  final x = d.globalPosition.dx;
+                  if (paged && (x < w * 0.2 || x > w * 0.8)) {
+                    final left = x < w * 0.2;
+                    _turn(dir == TextDirection.rtl ? left : !left);
+                    return;
+                  }
+                  _chrome.value = !_chrome.value;
                 },
-                child: NotificationListener<ScrollNotification>(
+                child: paged
+                    ? _pagedBody(s, set, dir, width, top, para)
+                    : NotificationListener<ScrollNotification>(
                   onNotification: _onScroll,
                   child: CustomScrollView(
                     controller: _scroll,
@@ -391,6 +540,22 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                 child: _TopBar(story: s, top: top, progress: _progress, onBack: app.back),
               ),
             ),
+            if (paged)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 14,
+                child: IgnorePointer(
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([_page, _pageCount]),
+                    builder: (_, _) => Text(
+                      _pageCount.value == 0 || _page.value >= _pageCount.value ? '' : '${_page.value + 1} / ${_pageCount.value}',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.d(12, weight: FontWeight.w700, color: paper.soft ?? c.textTertiary),
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -430,6 +595,109 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     // On a paper page the whole reader (bars, cards, sheets) takes its colours.
     return paperColors == null ? page : Theme(data: AppTheme.build(paperColors), child: page);
   }
+}
+
+// ------------------------------------------------------------------ pages
+
+class _Chunk {
+  const _Chunk(this.p, this.from, this.to);
+  final int p;
+  final int from;
+  final int to;
+}
+
+class _Page {
+  _Page(this.chunks, {this.header = false, this.footer = false});
+  final List<_Chunk> chunks;
+  final bool header;
+  final bool footer;
+}
+
+/// Splits a story into pages that fit [height]. Paragraphs are split at
+/// sentence boundaries when they don't fit; a single sentence taller than a
+/// page gets a page of its own, which scrolls.
+List<_Page> _paginate(Story s, Settings set, TextDirection dir, double width, double height, TextScaler scaler) {
+  final font = readerFontFor(set.fontByLanguage, set.readerFont, s.language);
+  final painter = TextPainter(textDirection: dir, textScaler: scaler);
+  double measure(String text, TextStyle style) {
+    painter.text = TextSpan(text: text, style: style);
+    painter.layout(maxWidth: max(40, width));
+    return painter.height;
+  }
+
+  final translationStyle = AppTheme.s(set.fontSize * 0.72, weight: FontWeight.w500, height: 1.5);
+  final styles = <bool, TextStyle>{};
+  TextStyle styleFor(bool ruby) => styles[ruby] ??= _readerStyle(set, font, const Color(0xFF000000)).copyWith(
+    height: ruby ? max(set.lineHeight, 2.3) : set.lineHeight,
+    wordSpacing: set.wordSpacing,
+    leadingDistribution: ruby ? TextLeadingDistribution.proportional : TextLeadingDistribution.even,
+  );
+
+  double chunkHeight(int p, int from, int to) {
+    final para = s.paragraphs[p];
+    final sentences = para.sentences.sublist(from, to);
+    final ruby = set.translit == 'above' && needsTransliteration(dominantScript(para.text));
+    var text = sentences.map((x) => x.text).join(' ');
+    if (!set.showMarks) text = stripVowelMarks(text);
+    if (set.paragraphIndent && from == 0) text = '\u2003\u2003$text';
+    // A little slack for rounding and the reading line above the first row.
+    var h = measure(text, styleFor(ruby)) * 1.03 + (ruby ? set.fontSize * 0.5 : 0);
+    final translations = sentences.map((x) => x.translation ?? '').where((t) => t.isNotEmpty).join(' ');
+    if (translations.isNotEmpty) {
+      if (set.sentenceTranslations == 'tap') h += 37;
+      if (set.sentenceTranslations == 'below') h += measure(translations, translationStyle) + 6;
+    }
+    return h + set.paragraphSpacing;
+  }
+
+  var header = 0.0;
+  if (set.showReaderHeader) {
+    header = 17 + 12 + measure(s.title, styleFor(false).copyWith(fontSize: set.fontSize * 1.45, height: 1.25)) + set.paragraphSpacing + 10;
+    if (s.author.isNotEmpty) header += 26;
+  }
+
+  final pages = <_Page>[];
+  var chunks = <_Chunk>[];
+  var used = header;
+  void flush() {
+    pages.add(_Page(chunks, header: pages.isEmpty && set.showReaderHeader));
+    chunks = [];
+    used = 0;
+  }
+
+  for (var p = 0; p < s.paragraphs.length; p++) {
+    final n = s.paragraphs[p].sentences.length;
+    var from = 0;
+    while (from < n) {
+      final room = height - used;
+      final whole = chunkHeight(p, from, n);
+      if (whole <= room) {
+        chunks.add(_Chunk(p, from, n));
+        used += whole;
+        break;
+      }
+      // The most sentences that still fit.
+      var to = from;
+      while (to < n && chunkHeight(p, from, to + 1) <= room) {
+        to++;
+      }
+      if (to > from) {
+        chunks.add(_Chunk(p, from, to));
+        from = to;
+        flush();
+      } else if (chunks.isEmpty && !(pages.isEmpty && header > 0 && used > 0)) {
+        chunks.add(_Chunk(p, from, from + 1));
+        from++;
+        flush();
+      } else {
+        flush();
+      }
+    }
+  }
+  if (chunks.isNotEmpty || pages.isEmpty) flush();
+  painter.dispose();
+  pages.add(_Page(const [], footer: true));
+  return pages;
 }
 
 // ------------------------------------------------------------------ chrome
@@ -643,6 +911,10 @@ class _Footer extends StatelessWidget {
                   )
                 else
                   GhostButton(label: 'Read again', icon: PhosphorIconsBold.arrowCounterClockwise, onTap: () => app.resetProgress(story)),
+                if (story.quiz.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _QuizCta(story: story, primary: done),
+                ],
                 if (next != null) ...[
                   const SizedBox(height: 10),
                   GhostButton(
@@ -665,6 +937,26 @@ class _Footer extends StatelessWidget {
   }
 }
 
+/// Opens the story's quiz; shows the best score once taken.
+class _QuizCta extends StatelessWidget {
+  const _QuizCta({required this.story, required this.primary});
+  final Story story;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = story.quiz.length;
+    final best = story.quizBest;
+    final label = best == null
+        ? 'Take the quiz · $n question${n == 1 ? '' : 's'}'
+        : 'Quiz again · best $best%';
+    void open() => context.appRead.go('quiz:${story.id}');
+    return primary
+        ? PrimaryButton(label: label, icon: PhosphorIconsBold.exam, onTap: open)
+        : GhostButton(label: label, icon: PhosphorIconsBold.exam, onTap: open);
+  }
+}
+
 // ------------------------------------------------------------------ text
 
 typedef _WordTap = void Function(String word, Sentence sentence, String key);
@@ -680,11 +972,17 @@ class _ParagraphView extends StatelessWidget {
     required this.onWord,
     required this.onSentence,
     this.onToggleTranslations,
+    this.from = 0,
+    this.to,
   });
 
   final TextDirection dir;
   final Story story;
   final int index;
+
+  /// The sentences shown, when a page holds only part of the paragraph.
+  final int from;
+  final int? to;
   final ReaderPaper paper;
   final ValueListenable<_Picked?> picked;
   final bool showTranslations;
@@ -715,13 +1013,15 @@ class _ParagraphView extends StatelessWidget {
     final strength = set.highlightStrength;
 
     // One string for the whole paragraph; words are ranges into it.
-    final buf = StringBuffer(set.paragraphIndent ? '  ' : '');
+    final buf = StringBuffer(set.paragraphIndent && from == 0 ? '  ' : '');
     final ranges = <TextRange>[];
     final refs = <(String, Sentence, String)>[];
     final marks = <int, WordMark>{};
-    for (var si = 0; si < paragraph.sentences.length; si++) {
+    final end = min(to ?? paragraph.sentences.length, paragraph.sentences.length);
+    final shownSentences = paragraph.sentences.sublist(min(from, end), end);
+    for (var si = from; si < end; si++) {
       final sentence = paragraph.sentences[si];
-      if (si > 0) buf.write(' ');
+      if (si > from) buf.write(' ');
       final tokens = _tokens(sentence);
       for (var ti = 0; ti < tokens.length; ti++) {
         final t = tokens[ti];
@@ -770,7 +1070,7 @@ class _ParagraphView extends StatelessWidget {
     }
     final text = TextSpan(text: buf.toString(), style: style);
 
-    final hasTranslations = paragraph.sentences.any((x) => x.translation != null);
+    final hasTranslations = shownSentences.any((x) => x.translation != null);
     return Directionality(
       textDirection: dir,
       child: Column(
@@ -830,7 +1130,7 @@ class _ParagraphView extends StatelessWidget {
                 border: BorderDirectional(start: BorderSide(color: c.accent.withValues(alpha: 0.5), width: 2)),
               ),
               child: Text(
-                paragraph.sentences.map((x) => x.translation ?? '').where((t) => t.isNotEmpty).join(' '),
+                shownSentences.map((x) => x.translation ?? '').where((t) => t.isNotEmpty).join(' '),
                 textDirection: isRtl(story.translationLanguage) ? TextDirection.rtl : TextDirection.ltr,
                 style: AppTheme.s(set.fontSize * 0.72, weight: FontWeight.w500, color: paper.soft ?? c.textSecondary, height: 1.5),
               ),

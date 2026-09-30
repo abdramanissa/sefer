@@ -130,6 +130,28 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _BigTile(
+                icon: PhosphorIconsFill.bookOpenText,
+                color: c.accent,
+                value: _compact(app.scoped ? (all.langWords[app.activeLanguage] ?? 0) : all.words),
+                label: 'Words read',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _BigTile(
+                icon: PhosphorIconsFill.checkCircle,
+                color: c.sage,
+                value: _compact(app.knownCount(app.scoped ? app.activeLanguage : null)),
+                label: 'Words known',
+              ),
+            ),
+          ],
+        ),
         if (langs.isNotEmpty) ...[
           const SizedBox(height: 30),
           const SectionHeading('Language streaks'),
@@ -246,6 +268,21 @@ class _StatsScreenState extends State<StatsScreen> {
                   Expanded(child: StatValue(value: '$finished', label: 'Stories finished')),
                 ],
               ),
+              if (t.quizzes > 0) ...[
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(child: StatValue(value: '${t.quizzes}', label: 'Quizzes taken')),
+                    Expanded(
+                      child: StatValue(
+                        value: '${(t.quizCorrect * 100 / max(1, t.quizQuestions)).round()}',
+                        unit: '%',
+                        label: 'Quiz answers right',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -313,7 +350,7 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               ToolRow(
                 label: 'Streak needs the goal',
-                detail: 'Off: any reading keeps the streak alive',
+                detail: 'Off: a minute of reading keeps the streak alive',
                 trailing: TinySwitch(value: s.streakNeedsGoal, onChanged: (v) => app.updateSettings((x) => x.streakNeedsGoal = v)),
               ),
             ],
@@ -550,3 +587,24 @@ Future<void> showHeatmapSettings(BuildContext context) => showAppSheet<void>(
     );
   },
 );
+
+class _BigTile extends StatelessWidget {
+  const _BigTile({required this.icon, required this.color, required this.value, required this.label});
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => SoftCard(
+    padding: const EdgeInsets.all(18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 22),
+        const SizedBox(height: 10),
+        StatValue(value: value, label: label),
+      ],
+    ),
+  );
+}

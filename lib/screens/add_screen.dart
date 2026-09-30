@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import '../widgets/covers.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
+import 'generate_panel.dart';
 import 'story_screen.dart';
 
 class AddScreen extends StatefulWidget {
@@ -27,7 +28,7 @@ class AddScreen extends StatefulWidget {
 class _Draft {
   static final text = TextEditingController();
   static final title = TextEditingController();
-  static String mode = 'paste'; // paste | files
+  static String mode = 'paste'; // paste | files | generate
   static String? language;
   static String? translation;
   static List<String> tags = [];
@@ -126,171 +127,180 @@ class _AddScreenState extends State<AddScreen> {
         SegToggle<String>(
           value: _Draft.mode,
           expand: true,
-          options: const {'paste': 'Paste or write', 'files': 'Import files'},
+          options: const {'paste': 'Paste', 'files': 'Files', 'generate': 'Generate'},
           onChanged: (v) => setState(() {
             _Draft.mode = v;
             _review = null;
           }),
         ),
         const SizedBox(height: 18),
-        if (_Draft.mode == 'paste') ...[
-          AppField(
-            controller: _Draft.text,
-            hint: 'Paste a text, or JSON in the Sefer format.\n\n'
-                'Put === on its own line between texts to add several at once.',
-            maxLines: null,
-            minLines: 8,
-            textDirection: isRtl('und', _Draft.text.text) ? TextDirection.rtl : null,
-            style: AppTheme.f(15, weight: FontWeight.w500, color: c.text, height: 1.5),
-            onChanged: (_) => setState(() => _review = null),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Pill(
-                label: 'Paste',
-                icon: PhosphorIconsBold.clipboardText,
-                onTap: () async {
-                  final data = await Clipboard.getData(Clipboard.kTextPlain);
-                  final t = data?.text;
-                  if (t == null || t.isEmpty) return;
-                  _Draft.text.text = t;
-                  setState(() => _review = null);
-                },
-              ),
-              const SizedBox(width: 8),
-              if (_Draft.text.text.isNotEmpty)
+        if (_Draft.mode == 'generate') ...[
+          GeneratePanel(onResult: (r) => setState(() => _review = r)),
+          if (review != null) ...[
+            const SizedBox(height: 22),
+            _Review(result: review, onSave: _save, onChanged: () => setState(() {})),
+          ],
+        ] else ...[
+          if (_Draft.mode == 'paste') ...[
+            AppField(
+              controller: _Draft.text,
+              hint: 'Paste a text, or JSON in the Sefer format (for example the answer from an AI chat).\n\n'
+                  'Put === on its own line between texts to add several at once.',
+              maxLines: null,
+              minLines: 8,
+              textDirection: isRtl('und', _Draft.text.text) ? TextDirection.rtl : null,
+              style: AppTheme.f(15, weight: FontWeight.w500, color: c.text, height: 1.5),
+              onChanged: (_) => setState(() => _review = null),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
                 Pill(
-                  label: 'Clear',
-                  icon: PhosphorIconsBold.x,
-                  onTap: () {
-                    _Draft.text.clear();
+                  label: 'Paste',
+                  icon: PhosphorIconsBold.clipboardText,
+                  onTap: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    final t = data?.text;
+                    if (t == null || t.isEmpty) return;
+                    _Draft.text.text = t;
                     setState(() => _review = null);
                   },
                 ),
-              const Spacer(),
-              if (_Draft.text.text.isNotEmpty)
-                Text(
-                  isJson ? 'JSON' : '${_Draft.text.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
-                  style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
-                ),
-            ],
-          ),
-        ] else ...[
-          SoftCard(
-            onTap: _pickFiles,
-            child: Column(
-              children: [
-                Icon(PhosphorIconsRegular.filePlus, size: 34, color: c.accent),
-                const SizedBox(height: 12),
-                Text('Choose files', style: AppTheme.f(17, color: c.text)),
-                const SizedBox(height: 6),
-                Text(
-                  '.json in the Sefer format (one story or many), or plain .txt. Pick as many as you like.',
-                  textAlign: TextAlign.center,
-                  style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary, height: 1.4),
-                ),
-                if (_files.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                const SizedBox(width: 8),
+                if (_Draft.text.text.isNotEmpty)
+                  Pill(
+                    label: 'Clear',
+                    icon: PhosphorIconsBold.x,
+                    onTap: () {
+                      _Draft.text.clear();
+                      setState(() => _review = null);
+                    },
+                  ),
+                const Spacer(),
+                if (_Draft.text.text.isNotEmpty)
                   Text(
-                    _files.join(' · '),
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+                    isJson ? 'JSON' : '${_Draft.text.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
                     style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
                   ),
-                ],
               ],
             ),
-          ),
-        ],
-        const SizedBox(height: 22),
-        if (!isJson || _Draft.mode == 'files') ...[
-          Kicker(_Draft.mode == 'files' ? 'For plain text files' : 'Details'),
-          const SizedBox(height: 10),
-          ToolGroup(
-            children: [
-              if (_Draft.mode == 'paste')
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                  child: TextField(
-                    controller: _Draft.title,
-                    style: AppTheme.f(14.5, weight: FontWeight.w500, color: c.text),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Title (optional, or use the first line)',
-                      hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
+          ] else ...[
+            SoftCard(
+              onTap: _pickFiles,
+              child: Column(
+                children: [
+                  Icon(PhosphorIconsRegular.filePlus, size: 34, color: c.accent),
+                  const SizedBox(height: 12),
+                  Text('Choose files', style: AppTheme.f(17, color: c.text)),
+                  const SizedBox(height: 6),
+                  Text(
+                    '.json in the Sefer format (one story or many), or plain .txt. Pick as many as you like.',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary, height: 1.4),
+                  ),
+                  if (_files.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _files.join(' · '),
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 22),
+          if (!isJson || _Draft.mode == 'files') ...[
+            Kicker(_Draft.mode == 'files' ? 'For plain text files' : 'Details'),
+            const SizedBox(height: 10),
+            ToolGroup(
+              children: [
+                if (_Draft.mode == 'paste')
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: TextField(
+                      controller: _Draft.title,
+                      style: AppTheme.f(14.5, weight: FontWeight.w500, color: c.text),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Title (optional, or use the first line)',
+                        hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
+                      ),
                     ),
                   ),
+                ToolRow(
+                  icon: PhosphorIconsRegular.translate,
+                  label: 'Language',
+                  value: _lang == 'und' ? 'Detect from script' : languageName(_lang),
+                  onTap: () async {
+                    final l = await pickLanguage(context, title: 'Text language', selected: _lang);
+                    if (l != null) setState(() => _Draft.language = l);
+                  },
                 ),
-              ToolRow(
-                icon: PhosphorIconsRegular.translate,
-                label: 'Language',
-                value: _lang == 'und' ? 'Detect from script' : languageName(_lang),
+                ToolRow(
+                  icon: PhosphorIconsRegular.chatsCircle,
+                  label: 'Translations in',
+                  value: languageName(_trans),
+                  onTap: () async {
+                    final l = await pickLanguage(context, title: 'Translation language', selected: _trans);
+                    if (l != null) setState(() => _Draft.translation = l);
+                  },
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final t in _Draft.tags)
+                Pill(label: '#$t', icon: PhosphorIconsBold.x, onTap: () => setState(() => _Draft.tags.remove(t))),
+              Pill(
+                label: _Draft.tags.isEmpty ? 'Add tags' : 'Tag',
+                icon: PhosphorIconsBold.hash,
                 onTap: () async {
-                  final l = await pickLanguage(context, title: 'Text language', selected: _lang);
-                  if (l != null) setState(() => _Draft.language = l);
-                },
-              ),
-              ToolRow(
-                icon: PhosphorIconsRegular.chatsCircle,
-                label: 'Translations in',
-                value: languageName(_trans),
-                onTap: () async {
-                  final l = await pickLanguage(context, title: 'Translation language', selected: _trans);
-                  if (l != null) setState(() => _Draft.translation = l);
+                  final t = await askText(context, title: 'Tag these texts', hint: 'e.g. A2, news', action: 'Add');
+                  if (t != null && t.isNotEmpty && !_Draft.tags.contains(t)) setState(() => _Draft.tags.add(t));
                 },
               ),
             ],
           ),
-        ],
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final t in _Draft.tags)
-              Pill(label: '#$t', icon: PhosphorIconsBold.x, onTap: () => setState(() => _Draft.tags.remove(t))),
-            Pill(
-              label: _Draft.tags.isEmpty ? 'Add tags' : 'Tag',
-              icon: PhosphorIconsBold.hash,
-              onTap: () async {
-                final t = await askText(context, title: 'Tag these texts', hint: 'e.g. A2, news', action: 'Add');
-                if (t != null && t.isNotEmpty && !_Draft.tags.contains(t)) setState(() => _Draft.tags.add(t));
-              },
+          const SizedBox(height: 20),
+          if (_Draft.mode == 'paste')
+            PrimaryButton(
+              label: 'Review',
+              icon: PhosphorIconsBold.eye,
+              onTap: _Draft.text.text.trim().isEmpty ? null : _reviewPaste,
             ),
+          if (review != null) ...[
+            const SizedBox(height: 22),
+            _Review(result: review, onSave: _save, onChanged: () => setState(() {})),
           ],
-        ),
-        const SizedBox(height: 20),
-        if (_Draft.mode == 'paste')
-          PrimaryButton(
-            label: 'Review',
-            icon: PhosphorIconsBold.eye,
-            onTap: _Draft.text.text.trim().isEmpty ? null : _reviewPaste,
+          const SizedBox(height: 26),
+          _FormatGuide(
+            open: _guide,
+            onToggle: () => setState(() => _guide = !_guide),
+            onTry: () => setState(() {
+              _Draft.mode = 'paste';
+              _Draft.text.text = _example;
+              _review = null;
+            }),
           ),
-        if (review != null) ...[
-          const SizedBox(height: 22),
-          _Review(result: review, onSave: _save),
         ],
-        const SizedBox(height: 26),
-        _FormatGuide(
-          open: _guide,
-          onToggle: () => setState(() => _guide = !_guide),
-          onTry: () => setState(() {
-            _Draft.mode = 'paste';
-            _Draft.text.text = _example;
-            _review = null;
-          }),
-        ),
       ],
     );
   }
 }
 
 class _Review extends StatelessWidget {
-  const _Review({required this.result, required this.onSave});
+  const _Review({required this.result, required this.onSave, required this.onChanged});
   final ImportResult result;
   final VoidCallback onSave;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -315,12 +325,30 @@ class _Review extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          s.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textDirection: isRtl(s.language, s.title) ? TextDirection.rtl : TextDirection.ltr,
-                          style: AppTheme.f(14.5, weight: FontWeight.w700, color: c.text),
+                        Pressable(
+                          scale: 0.98,
+                          onTap: () async {
+                            final t = await askText(context, title: 'Title', initial: s.title, action: 'Rename');
+                            if (t != null && t.trim().isNotEmpty) {
+                              s.title = t.trim();
+                              onChanged();
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  s.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textDirection: isRtl(s.language, s.title) ? TextDirection.rtl : TextDirection.ltr,
+                                  style: AppTheme.f(14.5, weight: FontWeight.w700, color: c.text),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(PhosphorIconsBold.pencilSimple, size: 12, color: c.textTertiary),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Wrap(
@@ -338,6 +366,7 @@ class _Review extends StatelessWidget {
                             if (s.paragraphs.any((p) => p.sentences.any((x) => x.glosses.isNotEmpty))) _Chip('glosses', c.info),
                             if (s.paragraphs.any((p) => p.sentences.any((x) => x.transliterations.isNotEmpty)))
                               _Chip('transliteration', c.brass),
+                            if (s.quiz.isNotEmpty) _Chip('${s.quiz.length}-question quiz', c.accent),
                           ],
                         ),
                       ],
@@ -416,6 +445,20 @@ const _example = '''{
         }
       ]
     }
+  ],
+  "quiz": [
+    {
+      "question": "Τι λέμε το πρωί;",
+      "translation": "What do we say in the morning?",
+      "options": ["Καληνύχτα", "Καλημέρα", "Αντίο"],
+      "answer": "Καλημέρα"
+    },
+    {
+      "question": "Είναι το «σας» ευγενικό;",
+      "translation": "Is «σας» polite?",
+      "type": "yes_no",
+      "answer": true
+    }
   ]
 }''';
 
@@ -457,7 +500,11 @@ class _FormatGuide extends StatelessWidget {
                 'Only "text" is required in a sentence. "translation", "glosses" '
                 '(word → meaning) and "transliterations" (word → reading) are optional, '
                 'and so are "tags" and "author". Glosses match words regardless of '
-                'case, nikkud or harakat.',
+                'case, nikkud or harakat.\n\n'
+                'An optional "quiz" goes after the paragraphs. Each question has '
+                'either "options" with the right one as "answer" (its text or its '
+                'number, from 0), or "type": "yes_no" or "true_false" with "answer" '
+                'true or false. "translation" and "explanation" are optional.',
                 style: body,
               ),
               const SizedBox(height: 12),

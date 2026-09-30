@@ -35,6 +35,9 @@ const _overlayLight = SystemUiOverlayStyle(
 
 const _navHeight = 70.0;
 
+/// The dock styles, in the order the settings show them.
+const navStyles = ['floating', 'island', 'bubble', 'docked', 'line'];
+
 /// Height the nav takes, so scrolling pages can pad their bottom.
 double navClearance(BuildContext context) =>
     _navHeight + 40 + MediaQuery.viewPaddingOf(context).bottom;
@@ -304,17 +307,23 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     final s = app.settings;
     final tabs = app.visibleTabs;
     final withFab = s.showCenterButton;
-    final docked = s.navStyle == 'docked';
+    final style = navStyles.contains(s.navStyle) ? s.navStyle : 'floating';
+    final docked = style == 'docked' || style == 'line';
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final screen = MediaQuery.sizeOf(context).width;
 
     // The bar spans the screen (up to a comfortable maximum) and every slot
     // shares the width, so adding or removing tabs or the centre button
-    // re-spaces everything instead of crowding it.
+    // re-spaces everything instead of crowding it. The island hugs its
+    // icons instead.
     const margin = 14.0;
-    final outer = docked ? screen : min(screen - margin * 2, 520.0);
     const pad = 8.0;
     final fabW = withFab ? 76.0 : 0.0;
+    final outer = docked
+        ? screen
+        : style == 'island'
+        ? min(screen - margin * 2, pad * 2 + fabW + tabs.length * 60.0)
+        : min(screen - margin * 2, 520.0);
     final slot = (outer - pad * 2 - fabW) / max(1, tabs.length);
     final half = (tabs.length + 1) ~/ 2;
     double slotX(int i) => i * slot + (withFab && i >= half ? fabW : 0);
@@ -379,7 +388,7 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
                 if (_to >= 0 && _to < tabs.length)
                   AnimatedBuilder(
                     animation: _move,
-                    builder: (context, _) => _pill(c, feel, slotX, slot),
+                    builder: (context, _) => _pill(c, feel, slotX, slot, style, s.showLabels),
                   ),
                 for (var i = 0; i < tabs.length; i++)
                   Positioned(
@@ -392,6 +401,7 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
                       selected: (_scrub ?? selected) == i,
                       lifted: _lifted && _scrub == i,
                       showLabel: s.showLabels,
+                      selectedColor: style == 'bubble' ? c.onEmber : (style == 'line' ? c.accent : c.text),
                       onTap: () => _openTab(tabs[i]),
                     ),
                   ),
@@ -431,7 +441,7 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _pill(SeferColors c, Feel feel, double Function(int) slotX, double slot) {
+  Widget _pill(SeferColors c, Feel feel, double Function(int) slotX, double slot, String style, bool labels) {
     const height = _navHeight;
     final t = _move.value;
     final fromX = slotX(_from.clamp(0, 99));
@@ -445,9 +455,22 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     final right = lerpDouble(fromX + slot, toX + slot, forward ? lead : trail)!;
     final squash = 1 - 0.14 * sin(pi * t) * ((toX - fromX).abs() > 0 ? 1 : 0);
     final grow = _lifted ? 6.0 : 0.0;
-    final pillH = (height - 16) * squash;
+    if (style == 'line') {
+      // A short bar under the current tab that stretches as it travels.
+      final stretch = (right - left - slot).abs() * 0.5;
+      final w = 22.0 + stretch + grow * 2;
+      return Positioned(
+        left: (left + right) / 2 - w / 2,
+        width: w,
+        top: labels ? 60 : 54,
+        height: 3,
+        child: DecoratedBox(decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(2))),
+      );
+    }
+    final bubble = style == 'bubble';
+    final pillH = (bubble ? (labels ? height - 14 : 46.0) : height - 16) * squash;
     final alpha = (c.isDark ? 0.10 : 0.07) * (_lifted ? 2.4 : 1);
-    final inset = max(4.0, (slot - 76) / 2);
+    final inset = max(4.0, (slot - (bubble ? (labels ? 64 : 56) : 76)) / 2);
     return Positioned(
       left: left + inset - grow,
       width: max(0, right - left - inset * 2 + grow * 2),
@@ -457,7 +480,7 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
         duration: const Duration(milliseconds: 260),
         curve: const Cubic(0.3, 1.25, 0.5, 1),
         decoration: BoxDecoration(
-          color: c.text.withValues(alpha: alpha),
+          color: bubble ? c.ember : c.text.withValues(alpha: alpha),
           borderRadius: BorderRadius.circular(feel.pill(pillH)),
           border: _lifted ? Border.all(color: Colors.white.withValues(alpha: 0.16)) : null,
           boxShadow: _lifted
@@ -475,6 +498,7 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.lifted,
     required this.showLabel,
+    required this.selectedColor,
     required this.onTap,
   });
 
@@ -482,12 +506,13 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final bool lifted;
   final bool showLabel;
+  final Color selectedColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.sc;
-    final color = selected ? c.text : c.textTertiary;
+    final color = selected ? selectedColor : c.textTertiary;
     return Semantics(
       button: true,
       selected: selected,

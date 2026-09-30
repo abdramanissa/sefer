@@ -18,7 +18,8 @@ Map<String, dynamic> buildBackup({
   'format': backupFormat,
   'version': backupVersion,
   'exported_at': DateTime.now().toIso8601String(),
-  'settings': settings.toJson(),
+  // API keys stay on the device.
+  'settings': settings.toJson(secrets: false),
   'shelves': shelves.map((s) => s.toJson()).toList(),
   'stories': stories.map((s) => s.toJson()).toList(),
   'vocab': vocab.map((v) => v.toJson()).toList(),

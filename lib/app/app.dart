@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
@@ -20,10 +22,24 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnight();
+  }
+
+  Timer? _midnight;
+
+  void _scheduleMidnight() {
+    _midnight?.cancel();
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1, 0, 0, 5);
+    _midnight = Timer(next.difference(now), () {
+      widget.state.checkDay();
+      _scheduleMidnight();
+    });
   }
 
   @override
   void dispose() {
+    _midnight?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -32,6 +48,10 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState s) {
     if (s == AppLifecycleState.paused || s == AppLifecycleState.detached || s == AppLifecycleState.hidden) {
       widget.state.flush();
+    }
+    if (s == AppLifecycleState.resumed) {
+      widget.state.checkDay();
+      _scheduleMidnight();
     }
   }
 

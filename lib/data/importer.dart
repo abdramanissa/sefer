@@ -147,6 +147,13 @@ Story? _storyFromMap(
       ? (m['tags'] as List).map((t) => '$t'.trim()).where((t) => t.isNotEmpty).toList()
       : <String>[];
   final cover = m['cover'];
+  final quiz = parseQuiz(m['quiz']);
+  final rawQuiz = m['quiz'];
+  final given = rawQuiz is List ? rawQuiz.length : (rawQuiz is Map && rawQuiz['questions'] is List ? (rawQuiz['questions'] as List).length : 0);
+  if (given > quiz.length) {
+    final n = given - quiz.length;
+    problems.add('$label: $n quiz question${n == 1 ? '' : 's'} had no usable answer, skipped.');
+  }
   return Story(
     id: newId(),
     title: title,
@@ -155,6 +162,7 @@ Story? _storyFromMap(
     author: (m['author'] as String?)?.trim() ?? '',
     paragraphs: paragraphs,
     tags: tags,
+    quiz: quiz,
     cover: cover is String
         ? Cover(kind: CoverKind.doodle, doodle: cover, hue: _rand.nextInt(8))
         : Cover(seed: _rand.nextInt(1 << 20), hue: _rand.nextInt(8)),

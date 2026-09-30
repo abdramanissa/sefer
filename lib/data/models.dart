@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../text/normalize.dart';
+import 'prompt.dart';
 import '../text/tokenizer.dart';
 import '../theme/app_colors.dart';
 
@@ -20,6 +21,129 @@ double _dbl(Object? v, [double d = 0]) => v is num ? v.toDouble() : d;
 bool _bool(Object? v, [bool d = false]) => v is bool ? v : d;
 String _str(Object? v, [String d = '']) => v is String ? v : d;
 DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+
+// ------------------------------------------------------------------ Quiz
+
+/// The kinds of question a quiz holds. There are no typed answers: every
+/// question is answered by picking one option.
+abstract final class QuizKind {
+  static const choice = 'choice';
+  static const yesNo = 'yes_no';
+  static const trueFalse = 'true_false';
+}
+
+class QuizQuestion {
+  QuizQuestion({
+    required this.question,
+    required this.options,
+    required this.answer,
+    this.kind = QuizKind.choice,
+    this.translation,
+    this.explanation,
+  });
+
+  String question;
+
+  /// The question in the translation language, if given.
+  String? translation;
+  String kind;
+  List<String> options;
+
+  /// Index of the correct option.
+  int answer;
+  String? explanation;
+
+  static const yesNo = ['Yes', 'No'];
+  static const trueFalse = ['True', 'False'];
+
+  /// Reads one question, forgiving about how the answer is written: an
+  /// index, the text of the right option, or a boolean / "yes" / "true" for
+  /// yes-no and true-false questions. Returns null when it can't be
+  /// answered.
+  static QuizQuestion? parse(Object? v) {
+    if (v is! Map) return null;
+    final q = _str(v['question'] ?? v['q'] ?? v['prompt']).trim();
+    if (q.isEmpty) return null;
+    var kind = _str(v['type'] ?? v['kind'], '').toLowerCase().replaceAll('-', '_').replaceAll('/', '_');
+    if (kind == 'yesno' || kind == 'yes_or_no') kind = QuizKind.yesNo;
+    if (kind == 'truefalse' || kind == 'true_or_false' || kind == 'boolean') kind = QuizKind.trueFalse;
+    var options = _strList(v['options'] ?? v['choices']).map((o) => o.trim()).where((o) => o.isNotEmpty).toList();
+    final raw = v['answer'] ?? v['correct'];
+    if (kind == QuizKind.yesNo || kind == QuizKind.trueFalse || (options.isEmpty && raw is bool)) {
+      if (kind != QuizKind.yesNo && kind != QuizKind.trueFalse) kind = QuizKind.trueFalse;
+      final labels = kind == QuizKind.yesNo ? yesNo : trueFalse;
+      final yes = switch (raw) {
+        bool b => b,
+        num n => n == 0,
+        String t => const {'yes', 'true', 'y', 't', '0'}.contains(t.trim().toLowerCase()) ||
+            t.trim().toLowerCase() == labels[0].toLowerCase() ||
+            (options.length == 2 && t.trim() == options[0]),
+        _ => null,
+      };
+      if (yes == null) return null;
+      return QuizQuestion(
+        question: q,
+        kind: kind,
+        options: options.length == 2 ? options : [...labels],
+        answer: yes ? 0 : 1,
+        translation: _optStr(v['translation']),
+        explanation: _optStr(v['explanation']),
+      );
+    }
+    if (options.length < 2) return null;
+    int? answer;
+    if (raw is num && raw.toInt() >= 0 && raw.toInt() < options.length) answer = raw.toInt();
+    if (raw is String) {
+      final t = raw.trim();
+      answer = options.indexOf(t);
+      if (answer < 0) answer = options.indexWhere((o) => o.toLowerCase() == t.toLowerCase());
+      // "B" or "b" for the second option.
+      if (answer < 0 && t.length == 1) {
+        final i = t.toUpperCase().codeUnitAt(0) - 65;
+        if (i >= 0 && i < options.length) answer = i;
+      }
+      if (answer < 0) answer = null;
+    }
+    if (answer == null) return null;
+    return QuizQuestion(
+      question: q,
+      kind: QuizKind.choice,
+      options: options,
+      answer: answer,
+      translation: _optStr(v['translation']),
+      explanation: _optStr(v['explanation']),
+    );
+  }
+
+  /// Written in the import format, with the answer as the option's text so
+  /// the file reads naturally.
+  Map<String, dynamic> toJson() => {
+    'question': question,
+    if (translation != null) 'translation': translation,
+    if (kind != QuizKind.choice) 'type': kind,
+    if (kind == QuizKind.choice) 'options': options,
+    if (kind != QuizKind.choice && !_defaultLabels) 'options': options,
+    'answer': kind == QuizKind.choice ? options[answer] : answer == 0,
+    if (explanation != null) 'explanation': explanation,
+  };
+
+  bool get _defaultLabels {
+    final d = kind == QuizKind.yesNo ? yesNo : trueFalse;
+    return options.length == 2 && options[0] == d[0] && options[1] == d[1];
+  }
+}
+
+String? _optStr(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+
+/// Reads a quiz given as an array of questions or as `{"questions": [...]}`.
+List<QuizQuestion> parseQuiz(Object? v) {
+  final list = switch (v) {
+    List l => l,
+    Map m when m['questions'] is List => m['questions'] as List,
+    _ => const [],
+  };
+  return list.map(QuizQuestion.parse).whereType<QuizQuestion>().toList();
+}
 
 // ------------------------------------------------------------------ Story
 
@@ -151,7 +275,12 @@ class Story {
     this.readSeconds = 0,
     this.counted = 0,
     this.favorite = false,
-  }) : tags = tags ?? [],
+    List<QuizQuestion>? quiz,
+    this.quizBest,
+    this.quizLast,
+    this.quizAttempts = 0,
+  }) : quiz = quiz ?? [],
+       tags = tags ?? [],
        shelves = shelves ?? [],
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
@@ -180,6 +309,13 @@ class Story {
   /// Paragraphs already added to "words read" in this read-through.
   int counted;
   bool favorite;
+
+  List<QuizQuestion> quiz;
+
+  /// Best and latest quiz scores, 0–100.
+  int? quizBest;
+  int? quizLast;
+  int quizAttempts;
 
   int? _wordCount;
   int get wordCount => _wordCount ??= paragraphs.fold<int>(
@@ -240,6 +376,10 @@ class Story {
     readSeconds: _int(j['read_seconds']),
     counted: _int(j['counted']),
     favorite: _bool(j['favorite']),
+    quiz: parseQuiz(j['quiz']),
+    quizBest: j['quiz_best'] is num ? _int(j['quiz_best']) : null,
+    quizLast: j['quiz_last'] is num ? _int(j['quiz_last']) : null,
+    quizAttempts: _int(j['quiz_attempts']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -262,6 +402,10 @@ class Story {
     'read_seconds': readSeconds,
     'counted': counted,
     if (favorite) 'favorite': true,
+    if (quiz.isNotEmpty) 'quiz': quiz.map((q) => q.toJson()).toList(),
+    if (quizBest != null) 'quiz_best': quizBest,
+    if (quizLast != null) 'quiz_last': quizLast,
+    if (quizAttempts > 0) 'quiz_attempts': quizAttempts,
   };
 
   /// The portable form used by import and export: the same shape as the
@@ -273,6 +417,7 @@ class Story {
     if (author.isNotEmpty) 'author': author,
     if (tags.isNotEmpty) 'tags': tags,
     'paragraphs': paragraphs.map((p) => p.toJson()).toList(),
+    if (quiz.isNotEmpty) 'quiz': quiz.map((q) => q.toJson()).toList(),
   };
 }
 
@@ -405,6 +550,9 @@ class DayActivity {
     this.known = 0,
     this.saved = 0,
     this.sessions = 0,
+    this.quizzes = 0,
+    this.quizCorrect = 0,
+    this.quizQuestions = 0,
     Map<String, int>? langSeconds,
     Map<String, int>? langWords,
   }) : langSeconds = langSeconds ?? {},
@@ -421,6 +569,11 @@ class DayActivity {
   /// Words saved to vocabulary with a meaning or a level.
   int saved;
   int sessions;
+
+  /// Quizzes taken, and right answers out of questions asked.
+  int quizzes;
+  int quizCorrect;
+  int quizQuestions;
   Map<String, int> langSeconds;
   Map<String, int> langWords;
 
@@ -435,6 +588,9 @@ class DayActivity {
     known: _int(j['known']),
     saved: _int(j['saved']),
     sessions: _int(j['sessions']),
+    quizzes: _int(j['quizzes']),
+    quizCorrect: _int(j['quiz_correct']),
+    quizQuestions: _int(j['quiz_questions']),
     langSeconds: (j['lang_seconds'] as Map? ?? {}).map(
       (k, v) => MapEntry('$k', _int(v)),
     ),
@@ -449,6 +605,9 @@ class DayActivity {
     'known': known,
     'saved': saved,
     'sessions': sessions,
+    if (quizzes > 0) 'quizzes': quizzes,
+    if (quizCorrect > 0) 'quiz_correct': quizCorrect,
+    if (quizQuestions > 0) 'quiz_questions': quizQuestions,
     if (langSeconds.isNotEmpty) 'lang_seconds': langSeconds,
     if (langWords.isNotEmpty) 'lang_words': langWords,
   };
@@ -610,6 +769,22 @@ class Settings {
   DateTime? lastBackupAt;
   int backupReminderDays = 14; // 0 = never
 
+  // Internet and AI. Off by default: Sefer only goes online when this is on
+  // and you ask it to.
+  bool internet = false;
+  String aiProvider = 'gemini'; // gemini | openrouter
+  String geminiKey = '';
+  String openRouterKey = '';
+  String geminiModel = 'gemini-2.5-flash';
+  String openRouterModel = 'google/gemini-2.5-flash';
+  GenOptions gen = GenOptions();
+
+  String appIcon = 'aleph'; // aleph | bet
+  String readerLayout = 'scroll'; // scroll | pages
+
+  String get aiKey => aiProvider == 'openrouter' ? openRouterKey : geminiKey;
+  String get aiModel => aiProvider == 'openrouter' ? openRouterModel : geminiModel;
+
   factory Settings.fromJson(Map<String, dynamic> j) {
     final s = Settings();
     s.themeMode = _str(j['theme_mode'], s.themeMode);
@@ -702,10 +877,20 @@ class Settings {
     s.backupReminderDays = _int(j['backup_reminder_days'], s.backupReminderDays);
     s.customFonts = (j['custom_fonts'] as List? ?? []).whereType<Map>().map((m) => CustomFont.fromJson(m.cast<String, dynamic>())).toList();
     s.lastBackupAt = _date(j['last_backup_at']);
+    s.internet = _bool(j['internet'], s.internet);
+    s.aiProvider = _str(j['ai_provider'], s.aiProvider) == 'openrouter' ? 'openrouter' : 'gemini';
+    s.geminiKey = _str(j['gemini_key']);
+    s.openRouterKey = _str(j['openrouter_key']);
+    s.geminiModel = _str(j['gemini_model'], s.geminiModel);
+    s.openRouterModel = _str(j['openrouter_model'], s.openRouterModel);
+    if (j['gen'] is Map) s.gen = GenOptions.fromJson((j['gen'] as Map).cast<String, dynamic>());
+    s.appIcon = _str(j['app_icon'], s.appIcon) == 'bet' ? 'bet' : 'aleph';
+    s.readerLayout = _str(j['reader_layout'], s.readerLayout) == 'pages' ? 'pages' : 'scroll';
     return s;
   }
 
-  Map<String, dynamic> toJson() => {
+  /// With [secrets] false, API keys are left out (for backups).
+  Map<String, dynamic> toJson({bool secrets = true}) => {
     'theme_mode': themeMode,
     'custom_theme_id': customThemeId,
     'custom_themes': customThemes.map((t) => t.toJson()).toList(),
@@ -785,5 +970,14 @@ class Settings {
     'active_language': activeLanguage,
     'last_backup_at': lastBackupAt?.toIso8601String(),
     'backup_reminder_days': backupReminderDays,
+    'internet': internet,
+    'ai_provider': aiProvider,
+    if (secrets && geminiKey.isNotEmpty) 'gemini_key': geminiKey,
+    if (secrets && openRouterKey.isNotEmpty) 'openrouter_key': openRouterKey,
+    'gemini_model': geminiModel,
+    'openrouter_model': openRouterModel,
+    'gen': gen.toJson(),
+    'app_icon': appIcon,
+    'reader_layout': readerLayout,
   };
 }

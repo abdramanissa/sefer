@@ -1,8 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Sefer is offline by design: make sure no library merges network
-         access into the release build. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- Used only by the story generator, and only while the Internet switch
+         in Profile → Internet & AI is on. Every request goes through
+         lib/data/ai.dart, which refuses to connect while it is off. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Sefer"
         android:name="${applicationName}"
@@ -26,11 +27,39 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- The launcher icons are the aliases below, so the icon can be
+                 switched in the app. This filter only exists so `flutter run`
+                 finds the activity to start; the data scheme keeps it out of
+                 the launcher. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+                <data android:scheme="sefer-dev"/>
+            </intent-filter>
+        </activity>
+        <!-- One alias per app icon; AppIcon in MainActivity.kt enables one. -->
+        <activity-alias
+            android:name=".IconAleph"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconBet"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_bet"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -791,9 +791,13 @@ class AppField extends StatelessWidget {
     this.style,
     this.autofocus = false,
     this.keyboardType,
+    this.obscure = false,
+    this.trailing,
   });
 
   final TextEditingController controller;
+  final bool obscure;
+  final Widget? trailing;
   final String? hint;
   final String? label;
   final int? maxLines;
@@ -818,21 +822,31 @@ class AppField extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(16)),
-          child: TextField(
-            controller: controller,
-            maxLines: maxLines,
-            minLines: minLines,
-            autofocus: autofocus,
-            onChanged: onChanged,
-            keyboardType: keyboardType,
-            textDirection: textDirection,
-            style: style ?? AppTheme.f(14.5, weight: FontWeight.w500, color: c.text, height: 1.4),
-            decoration: InputDecoration(
-              isCollapsed: true,
-              border: InputBorder.none,
-              hintText: hint,
-              hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  maxLines: obscure ? 1 : maxLines,
+                  minLines: minLines,
+                  autofocus: autofocus,
+                  onChanged: onChanged,
+                  keyboardType: keyboardType,
+                  textDirection: textDirection,
+                  obscureText: obscure,
+                  autocorrect: !obscure,
+                  enableSuggestions: !obscure,
+                  style: style ?? AppTheme.f(14.5, weight: FontWeight.w500, color: c.text, height: 1.4),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: hint,
+                    hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
         ),
       ],

@@ -119,6 +119,16 @@ class _StoryScreenState extends State<StoryScreen> {
           icon: PhosphorIconsFill.bookOpenText,
           onTap: () => app.openStory(s),
         ),
+        if (s.quiz.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          GhostButton(
+            label: s.quizBest == null
+                ? 'Quiz · ${s.quiz.length} question${s.quiz.length == 1 ? '' : 's'}'
+                : 'Quiz · best ${s.quizBest}%',
+            icon: PhosphorIconsBold.exam,
+            onTap: () => app.go('quiz:${s.id}'),
+          ),
+        ],
         const SizedBox(height: 26),
         AppField(
           controller: _title,

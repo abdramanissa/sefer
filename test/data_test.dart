@@ -168,6 +168,16 @@ void main() {
       expect(currentStreak(d, today, languageTest('he')), 0);
     });
 
+    test('a word saved or a few seconds of reading keep no streak', () {
+      final d = {
+        dayKey(today): DayActivity(seconds: 20),
+        dayKey(today.subtract(const Duration(days: 1))): DayActivity(saved: 3, words: 40, langWords: {'es': 40}),
+        dayKey(today.subtract(const Duration(days: 2))): DayActivity(seconds: 300, langSeconds: {'es': 300}),
+      };
+      expect(currentStreak(d, today, dailyTest(needsGoal: false, goalMinutes: 15)), 0);
+      expect(currentStreak(d, today, languageTest('es')), 0);
+    });
+
     test('best streak across month boundaries', () {
       final d = {
         '2026-08-30': DayActivity(seconds: 1),
@@ -290,6 +300,73 @@ void main() {
       expect(app.back(), isTrue);
       expect(app.route, 'library');
       expect(app.back(), isFalse);
+    });
+  });
+
+  group('quiz', () {
+    const json = '''
+{
+  "title": "Michael",
+  "language": "en",
+  "paragraphs": ["Michael went to the market."],
+  "quiz": [
+    {"question": "Michael went to the ...", "options": ["school", "market", "beach"], "answer": "market"},
+    {"question": "Where did he go?", "options": ["home", "work"], "answer": 1, "explanation": "He went to work."},
+    {"question": "Did Michael go out?", "type": "yes_no", "answer": "yes"},
+    {"question": "Michael stayed home.", "type": "true_false", "answer": false},
+    {"question": "Pick the letter", "options": ["a", "b", "c"], "answer": "C"},
+    {"question": "No answer here", "options": ["x", "y"]},
+    {"question": "Write your answer"}
+  ]
+}''';
+
+    test('reads every kind of question and skips unanswerable ones', () {
+      final r = importText(json);
+      final q = r.stories.single.quiz;
+      expect(q, hasLength(5));
+      expect(q[0].answer, 1);
+      expect(q[1].answer, 1);
+      expect(q[1].explanation, 'He went to work.');
+      expect(q[2].kind, QuizKind.yesNo);
+      expect(q[2].options, ['Yes', 'No']);
+      expect(q[2].answer, 0);
+      expect(q[3].kind, QuizKind.trueFalse);
+      expect(q[3].answer, 1);
+      expect(q[4].answer, 2);
+      expect(r.problems.single, contains('2 quiz questions'));
+    });
+
+    test('survives storage and export', () {
+      final s = importText(json).stories.single;
+      final back = Story.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>);
+      expect(back.quiz.map((q) => '${q.kind} ${q.options} ${q.answer}').toList(), s.quiz.map((q) => '${q.kind} ${q.options} ${q.answer}').toList());
+      final again = importText(jsonEncode(s.toPortableJson())).stories.single;
+      expect(again.quiz, hasLength(5));
+      expect(again.quiz[2].answer, 0);
+    });
+
+    test('accepts {"questions": [...]} too', () {
+      final q = parseQuiz({
+        'questions': [
+          {'question': 'Is it?', 'answer': true},
+        ],
+      });
+      expect(q.single.kind, QuizKind.trueFalse);
+    });
+
+    test('records scores, best and daily totals', () async {
+      final app = AppState(MemoryStore());
+      await app.load();
+      app.addStories(importText(json).stories);
+      final s = app.stories.single;
+      expect(app.recordQuiz(s, 3, 5), isTrue);
+      expect(app.recordQuiz(s, 2, 5), isFalse);
+      expect(s.quizBest, 60);
+      expect(s.quizLast, 40);
+      expect(s.quizAttempts, 2);
+      expect(app.today.quizzes, 2);
+      expect(app.today.quizCorrect, 5);
+      expect(app.today.quizQuestions, 10);
     });
   });
 }

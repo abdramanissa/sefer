@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart';
 
 import '../text/tokenizer.dart';
 import '../theme/app_colors.dart';
+import '../theme/presets.dart';
+import 'app_icon.dart';
 import 'exporter.dart';
 import 'importer.dart';
 import 'models.dart';
@@ -48,9 +50,14 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------ persistence
 
+  /// Version of the stored documents. Version 2 added quizzes to stories;
+  /// older libraries load as they are and are rewritten in the new shape.
+  static const dataVersion = 2;
+
   Future<void> load() async {
     final lib = await store.read(_library);
     if (lib is Map) {
+      if ((lib['version'] as num? ?? 1) < dataVersion) _markDirty(_library);
       stories = (lib['stories'] as List? ?? [])
           .whereType<Map>()
           .map((m) => Story.fromJson(m.cast<String, dynamic>()))
@@ -104,6 +111,7 @@ class AppState extends ChangeNotifier {
       switch (d) {
         case _library:
           await store.write(_library, {
+            'version': dataVersion,
             'stories': stories.map((s) => s.toJson()).toList(),
             'shelves': shelves.map((s) => s.toJson()).toList(),
           });
@@ -141,7 +149,7 @@ class AppState extends ChangeNotifier {
         final t = customTheme(settings.customThemeId);
         return t?.palette ?? SeferColors.dark;
       default:
-        return SeferColors.dark;
+        return presetById(settings.themeMode)?.palette ?? SeferColors.dark;
     }
   }
 
@@ -254,7 +262,7 @@ class AppState extends ChangeNotifier {
     return i < 0 ? route : route.substring(0, i);
   }
 
-  bool get showNav => routeName != 'reader';
+  bool get showNav => routeName != 'reader' && routeName != 'quiz';
 
   // ------------------------------------------------------------ library
 
@@ -545,6 +553,24 @@ class AppState extends ChangeNotifier {
     return marked;
   }
 
+  /// Records a finished quiz. Returns true when it beat the best score.
+  bool recordQuiz(Story s, int correct, int total) {
+    if (total <= 0) return false;
+    final score = (correct * 100 / total).round();
+    final best = s.quizBest == null || score > s.quizBest!;
+    s.quizLast = score;
+    if (best) s.quizBest = score;
+    s.quizAttempts++;
+    final d = _day();
+    d.quizzes++;
+    d.quizCorrect += correct;
+    d.quizQuestions += total;
+    _markDirty(_library);
+    _markDirty(_activity);
+    notifyListeners();
+    return best;
+  }
+
   void resetProgress(Story s) {
     s.position = 0;
     s.progress = 0;
@@ -706,6 +732,17 @@ class AppState extends ChangeNotifier {
 
   DayActivity get today => activity[dayKey(DateTime.now())] ?? DayActivity();
 
+  String _dayShown = dayKey(DateTime.now());
+
+  /// Rebuilds when the calendar day has changed since the last check, so
+  /// streaks and today's numbers don't stay stale in a long-running app.
+  void checkDay() {
+    final k = dayKey(DateTime.now());
+    if (k == _dayShown) return;
+    _dayShown = k;
+    notifyListeners();
+  }
+
   // ------------------------------------------------------------ backup
 
   Future<Map<String, dynamic>> backup() async {
@@ -754,7 +791,15 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addEntries(b.vocab.map((v) => MapEntry(v.key, v)));
       activity = b.activity;
-      settings = b.settings..onboarded = true;
+      // Keys and the internet switch belong to this device, not the backup.
+      final old = settings;
+      settings = b.settings
+        ..onboarded = true
+        ..internet = old.internet
+        ..geminiKey = old.geminiKey
+        ..openRouterKey = old.openRouterKey;
+      // The launcher icon follows the restored choice.
+      unawaited(AppIcon.set(settings.appIcon));
     }
     vocabVersion++;
     _dirty.addAll([_library, _vocab, _activity, _settings]);
