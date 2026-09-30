@@ -39,10 +39,14 @@ int bestStreak(Map<String, DayActivity> days, DayTest test) {
   return best;
 }
 
-DayTest dailyTest({required bool needsGoal, required int goalMinutes}) =>
-    needsGoal ? (d) => d.seconds >= goalMinutes * 60 : (d) => d.isActive;
+/// Reading this long in a day keeps a streak alive. Opening a story for a
+/// second, saving a word or finishing a story doesn't count on its own.
+const streakMinSeconds = 60;
 
-DayTest languageTest(String lang) => (d) => d.activeIn(lang);
+DayTest dailyTest({required bool needsGoal, required int goalMinutes}) =>
+    needsGoal ? (d) => d.seconds >= goalMinutes * 60 : (d) => d.seconds >= streakMinSeconds;
+
+DayTest languageTest(String lang) => (d) => (d.langSeconds[lang] ?? 0) >= streakMinSeconds;
 
 class Totals {
   int seconds = 0;
@@ -51,6 +55,9 @@ class Totals {
   int saved = 0;
   int sessions = 0;
   int activeDays = 0;
+  int quizzes = 0;
+  int quizCorrect = 0;
+  int quizQuestions = 0;
   final Map<String, int> langSeconds = {};
   final Map<String, int> langWords = {};
 }
@@ -66,6 +73,9 @@ Totals totals(Map<String, DayActivity> days, {DateTime? since}) {
     t.known += d.known;
     t.saved += d.saved;
     t.sessions += d.sessions;
+    t.quizzes += d.quizzes;
+    t.quizCorrect += d.quizCorrect;
+    t.quizQuestions += d.quizQuestions;
     if (d.isActive) t.activeDays++;
     d.langSeconds.forEach((k, v) => t.langSeconds[k] = (t.langSeconds[k] ?? 0) + v);
     d.langWords.forEach((k, v) => t.langWords[k] = (t.langWords[k] ?? 0) + v);

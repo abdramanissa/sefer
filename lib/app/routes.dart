@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../screens/add_screen.dart';
+import '../screens/ai_settings.dart';
 import '../screens/library_screen.dart';
+import '../screens/quiz_screen.dart';
 import '../screens/reader_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/stats_screen.dart';
@@ -25,10 +27,12 @@ Widget buildScreen(String route) {
       'layout' => const LayoutScreen(),
       'motion' => const MotionScreen(),
       'about' => const AboutScreen(),
+      'ai' => const AiSettingsScreen(),
       _ => const ProfileScreen(),
     },
     'reader' => ReaderScreen(id: arg),
     'story' => StoryScreen(id: arg),
+    'quiz' => QuizScreen(key: ValueKey(arg), id: arg),
     'theme' => ThemeEditorScreen(id: arg),
     _ => const LibraryScreen(),
   };

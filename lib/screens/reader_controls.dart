@@ -83,6 +83,15 @@ class _ReaderControlsState extends State<ReaderControls> {
               onChanged: (v) => set(() => s.readerMode = v),
             ),
             _SegRow(
+              label: 'Layout',
+              detail: s.readerLayout == 'pages'
+                  ? 'Swipe or tap the edges to turn the page'
+                  : 'One long page you scroll',
+              value: s.readerLayout,
+              options: const {'scroll': 'Scroll', 'pages': 'Pages'},
+              onChanged: (v) => set(() => s.readerLayout = v),
+            ),
+            _SegRow(
               label: 'Tapping a word opens',
               value: s.wordPopup,
               options: const {'card': 'Small card', 'sheet': 'Full sheet'},
@@ -203,11 +212,6 @@ class _ReaderControlsState extends State<ReaderControls> {
               ),
             ],
           ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Bring any .ttf or .otf you have, for example SF Hebrew or SF Arabic from Apple.',
-          style: AppTheme.f(11.5, weight: FontWeight.w500, color: c.textTertiary),
         ),
         const SizedBox(height: 18),
         const Kicker('Text'),

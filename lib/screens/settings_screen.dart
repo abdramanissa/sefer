@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../app/app_shell.dart';
+import '../data/app_icon.dart';
 import '../data/app_state.dart';
 import '../data/exporter.dart';
 import '../data/io.dart';
@@ -13,6 +14,7 @@ import '../theme/app_colors.dart';
 import '../data/stats.dart';
 import '../theme/app_theme.dart';
 import '../theme/feel.dart';
+import '../theme/presets.dart';
 import '../widgets/covers.dart';
 import '../widgets/common.dart';
 import '../widgets/notch_toast.dart';
@@ -173,6 +175,12 @@ class ProfileScreen extends StatelessWidget {
             ),
             ToolRow(icon: PhosphorIconsRegular.layout, label: 'Navigation', value: '${s.tabs.length} tabs', onTap: () => app.go('settings:layout')),
             ToolRow(icon: PhosphorIconsRegular.sparkle, label: 'Transitions', value: _transitionName(s.transition), onTap: () => app.go('settings:motion')),
+            ToolRow(
+              icon: s.internet ? PhosphorIconsRegular.globe : PhosphorIconsRegular.globeX,
+              label: 'Internet & AI',
+              value: s.internet ? 'On' : 'Off',
+              onTap: () => app.go('settings:ai'),
+            ),
             ToolRow(icon: PhosphorIconsRegular.squaresFour, label: 'Activity chart', value: '${s.heatWeeks} weeks', onTap: () => showHeatmapSettings(context)),
           ],
         ),
@@ -275,7 +283,7 @@ class ProfileScreen extends StatelessWidget {
     'light' => 'Light',
     'system' => 'Automatic',
     'custom' => app.customTheme(app.settings.customThemeId)?.name ?? 'Dark',
-    _ => 'Dark',
+    final m => presetById(m)?.name ?? 'Dark',
   };
 
   static String _transitionName(String t) => switch (t) {
@@ -662,8 +670,24 @@ class AppearanceScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
+        const Kicker('Popular'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 12,
+          children: [
+            for (final p in themePresets)
+              SizedBox(
+                width: (MediaQuery.sizeOf(context).width - context.feel.gutter * 2 - 20) / 3,
+                child: _ThemeTile(label: p.name, palette: p.palette, selected: s.themeMode == p.id, onTap: () => mode(p.id)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
         if (s.customThemes.isNotEmpty) ...[
+          const Kicker('Yours'),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -692,6 +716,63 @@ class AppearanceScreen extends StatelessWidget {
             final t = app.createTheme(name: 'My theme ${s.customThemes.length + 1}', from: c);
             app.go('theme:${t.id}');
           },
+        ),
+        const SizedBox(height: 28),
+        const Kicker('App icon'),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (final e in AppIcon.all.entries) ...[
+              if (e.key != AppIcon.all.keys.first) const SizedBox(width: 14),
+              Semantics(
+                button: true,
+                selected: s.appIcon == e.key,
+                label: '${e.value.$1} icon',
+                excludeSemantics: true,
+                child: Pressable(
+                  scale: 0.94,
+                  onTap: () async {
+                    if (s.appIcon == e.key) return;
+                    app.updateSettings((x) => x.appIcon = e.key);
+                    final ok = await AppIcon.set(e.key);
+                    if (!context.mounted) return;
+                    showNotchToast(
+                      context,
+                      title: ok ? '${e.value.$1} icon' : 'Icon saved',
+                      subtitle: ok ? 'Your launcher may take a moment to update' : 'Applies on the phone',
+                      icon: PhosphorIconsFill.appWindow,
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(context.feel.r(24)),
+                          border: Border.all(color: s.appIcon == e.key ? c.ember : Colors.transparent, width: 2.5),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(context.feel.r(19)),
+                          child: Image.asset('assets/icons/${e.key}.png', width: 64, height: 64, filterQuality: FilterQuality.medium),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        e.value.$1,
+                        style: AppTheme.f(12.5, weight: s.appIcon == e.key ? FontWeight.w800 : FontWeight.w600, color: s.appIcon == e.key ? c.text : c.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Both follow your phone\'s themed icons on Android 13 and later.',
+          style: AppTheme.f(12, weight: FontWeight.w500, color: c.textTertiary),
         ),
         const SizedBox(height: 28),
         const Kicker('Accent'),
@@ -1099,18 +1180,29 @@ class LayoutScreen extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 22),
+        const Kicker('Dock style'),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, box) => Wrap(
+            spacing: 10,
+            runSpacing: 12,
+            children: [
+              for (final st in navStyles)
+                SizedBox(
+                  width: (box.maxWidth - 20) / 3,
+                  child: _DockTile(
+                    style: st,
+                    selected: s.navStyle == st,
+                    onTap: () => app.updateSettings((x) => x.navStyle = st),
+                  ),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 16),
         ToolGroup(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: SegToggle<String>(
-                value: s.navStyle,
-                expand: true,
-                options: const {'floating': 'Floating bar', 'docked': 'Docked to the edge'},
-                onChanged: (v) => app.updateSettings((x) => x.navStyle = v),
-              ),
-            ),
             ToolRow(
               icon: PhosphorIconsRegular.rocketLaunch,
               label: 'Open the app on',
@@ -1126,6 +1218,100 @@ class LayoutScreen extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// A small drawing of a dock style.
+class _DockTile extends StatelessWidget {
+  const _DockTile({required this.style, required this.selected, required this.onTap});
+  final String style;
+  final bool selected;
+  final VoidCallback onTap;
+
+  static const _names = {
+    'floating': 'Floating',
+    'island': 'Island',
+    'bubble': 'Bubble',
+    'docked': 'Docked',
+    'line': 'Line',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    final docked = style == 'docked' || style == 'line';
+    Widget dot(bool on) {
+      final col = on
+          ? (style == 'bubble' ? c.onEmber : (style == 'line' ? c.accent : c.text))
+          : c.textTertiary;
+      Widget icon = Container(width: 9, height: 9, decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(3)));
+      if (on && style != 'line') {
+        icon = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+          decoration: BoxDecoration(
+            color: style == 'bubble' ? c.ember : c.text.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: icon,
+        );
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          if (style == 'line') ...[
+            const SizedBox(height: 3),
+            Container(width: 10, height: 2, color: on ? c.accent : Colors.transparent),
+          ],
+        ],
+      );
+    }
+
+    final bar = Container(
+      height: 30,
+      width: style == 'island' ? 72 : double.infinity,
+      margin: docked ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: c.bgRaised2,
+        borderRadius: docked ? null : BorderRadius.circular(15),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [dot(true), dot(false), dot(false)],
+      ),
+    );
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${_names[style]} dock',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.96,
+        onTap: onTap,
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: 84,
+              decoration: BoxDecoration(
+                color: c.bgRaised,
+                borderRadius: BorderRadius.circular(context.feel.r(18)),
+                border: Border.all(color: selected ? c.ember : c.border, width: selected ? 2.5 : 1),
+              ),
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.bottomCenter,
+              padding: EdgeInsets.only(bottom: docked ? 0 : 8),
+              child: bar,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _names[style]!,
+              style: AppTheme.f(12.5, weight: selected ? FontWeight.w800 : FontWeight.w600, color: selected ? c.text : c.textSecondary),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1250,6 +1436,7 @@ class AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.app;
     final c = context.sc;
+    final s = app.settings;
     final body = AppTheme.f(13.5, weight: FontWeight.w500, color: c.textSecondary, height: 1.5);
     Widget point(IconData icon, String title, String text) => Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1287,8 +1474,10 @@ class AboutScreen extends StatelessWidget {
         const SizedBox(height: 26),
         point(
           PhosphorIconsRegular.wifiSlash,
-          'Fully offline',
-          'The app has no internet permission. It cannot send anything anywhere, and there is no account, analytics or ads.',
+          'Offline unless you say so',
+          s.internet
+              ? 'Internet is on, and used only when you generate a story or load the list of models. Nothing about your library, words or stats is sent. There is no account, analytics or ads.'
+              : 'Internet is off, so the app sends nothing anywhere. There is no account, analytics or ads.',
         ),
         point(
           PhosphorIconsRegular.hardDrives,

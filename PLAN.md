@@ -9,9 +9,11 @@ DESIGN.md talks about workouts, Sefer talks about reading sessions.
 
 ## Principles
 
-1. **Offline and private.** The Android app declares no `INTERNET`
-   permission. There is no analytics, account or cloud. Everything lives in
-   the app's private storage and leaves only when you export it.
+1. **Offline and private.** Internet is off by default; the only network
+   code is the optional story generator (`lib/data/ai.dart`), which refuses
+   to connect while the switch is off and sends only the prompt. There is no
+   analytics, account or cloud. Everything lives in the app's private
+   storage and leaves only when you export it.
 2. **User-owned content.** Sefer ships no texts. Every story, translation,
    gloss, cover and theme is something you typed, pasted or imported.
 3. **Honest stats.** Numbers come only from what you actually did.
