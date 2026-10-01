@@ -69,35 +69,52 @@ const _greek = '''
   ]
 }''';
 
-const _spanish = '''
-El jardín de mi abuela
-Mi abuela tiene un jardín pequeño detrás de su casa. Cada mañana sale con una taza de café y mira las flores.
+const _catalan = '''
+{
+  "title": "El jardí de l'àvia",
+  "language": "ca",
+  "translation_language": "en",
+  "tags": ["A2"],
+  "paragraphs": [
+    {"sentences": [
+      {"text": "La meva àvia té un jardí petit darrere de casa.", "translation": "My grandmother has a small garden behind the house.",
+       "glosses": {"àvia": "grandmother", "jardí": "garden", "darrere": "behind"}},
+      {"text": "Cada matí surt amb una tassa de cafè i mira les flors.", "translation": "Every morning she goes out with a cup of coffee and looks at the flowers.",
+       "glosses": {"matí": "morning", "tassa": "cup", "flors": "flowers"}}
+    ]},
+    {"sentences": [
+      {"text": "Diu que les plantes escolten.", "translation": "She says the plants listen."},
+      {"text": "Per això els parla en veu baixa, com si fossin velles amigues.", "translation": "That's why she talks to them quietly, as if they were old friends."}
+    ]}
+  ]
+}''';
 
-Dice que las plantas escuchan. Por eso les habla en voz baja, como si fueran viejas amigas.
+const _market = '''
+Al mercat
+El dissabte anem al mercat del barri. Hi ha fruita, peix i formatge.
+
+La venedora sempre ens dona una mandarina i ens pregunta pel gos.
 ''';
 
-const _hebrew = '''
-בְּרֵאשִׁית
-בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ. וְהָאָרֶץ הָיְתָה תֹהוּ וָבֹהוּ.
-''';
+const _port = '''
+Στο λιμάνι
+Το πρωί το λιμάνι είναι ήσυχο. Οι ψαράδες γυρίζουν με τις βάρκες τους.
 
-const _arabic = '''
-في المقهى
-ذَهَبْتُ إِلَى الْمَقْهَى صَبَاحًا. طَلَبْتُ فِنْجَانَ قَهْوَةٍ وَكِتَابًا صَغِيرًا.
+Μια γάτα περιμένει στην άκρη του μώλου.
 ''';
 
 Future<AppState> _seed() async {
   final app = AppState(MemoryStore());
   await app.load();
-  app.addStories(importText(_arabic, plain: const PlainTextOptions(language: 'ar', tags: ['cafe'])).stories);
-  app.addStories(importText(_hebrew, plain: const PlainTextOptions(language: 'he', tags: ['classic'])).stories);
-  app.addStories(importText(_spanish, plain: const PlainTextOptions(language: 'es', tags: ['A2'])).stories);
+  app.addStories(importText(_port, plain: const PlainTextOptions(language: 'el', tags: ['A2'])).stories);
+  app.addStories(importText(_market, plain: const PlainTextOptions(language: 'ca', tags: ['A1'])).stories);
+  app.addStories(importText(_catalan).stories);
   app.addStories(importText(_greek).stories);
   final covers = [
     const Cover(kind: CoverKind.doodle, doodle: 'lake', hue: 6),
-    const Cover(kind: CoverKind.pattern, seed: 3, hue: 1),
     const Cover(kind: CoverKind.doodle, doodle: 'field', hue: 2),
-    const Cover(kind: CoverKind.doodle, doodle: 'dunes', hue: 0),
+    const Cover(kind: CoverKind.doodle, doodle: 'city', hue: 3),
+    const Cover(kind: CoverKind.doodle, doodle: 'coast', hue: 1),
   ];
   for (var i = 0; i < app.stories.length; i++) {
     app.stories[i].cover = covers[i];
@@ -113,10 +130,10 @@ Future<AppState> _seed() async {
   app.setWord('el', 'πολύ', status: 3, meaning: 'very');
   app.setWord('el', 'Ο', status: WordStatus.known);
   app.setWord('el', 'είναι', status: WordStatus.known);
-  app.setWord('es', 'jardín', status: 1, meaning: 'garden', example: 'Mi abuela tiene un jardín pequeño.');
-  app.setWord('es', 'abuela', status: 4, meaning: 'grandmother');
-  app.setWord('he', 'הָאָרֶץ', status: 2, meaning: 'the earth');
-  app.settings.learning = ['el', 'es', 'he', 'ar'];
+  app.setWord('ca', 'jardí', status: 1, meaning: 'garden', example: 'La meva àvia té un jardí petit darrere de casa.');
+  app.setWord('ca', 'àvia', status: 4, meaning: 'grandmother');
+  app.setWord('ca', 'cafè', status: WordStatus.known);
+  app.settings.learning = ['el', 'ca'];
   app.settings.profileName = 'Issa';
   final r = Random(4);
   final now = DateTime.now();
@@ -124,7 +141,7 @@ Future<AppState> _seed() async {
     if (r.nextDouble() < 0.28 && d > 6) continue;
     final day = DateTime(now.year, now.month, now.day - d);
     final secs = (r.nextDouble() * 2400).round() + 60;
-    final lang = ['el', 'es', 'he'][r.nextInt(3)];
+    final lang = ['el', 'ca'][r.nextInt(2)];
     app.activity[dayKey(day)] = DayActivity(
       seconds: secs,
       words: secs ~/ 4,
@@ -179,26 +196,6 @@ void main() {
       await t.pumpAndSettle();
       final r = t.renderObject<RenderWordText>(find.byType(WordText).first);
       await t.tapAt(r.globalRectOf(0).center);
-      await t.pumpAndSettle();
-    });
-  });
-
-  testWidgets('reader hebrew above', (t) async {
-    final app = await _seed();
-    app.settings.translit = 'above';
-    app.settings.readerFont = 'frankruhl';
-    await shot(t, app, 'reader_hebrew', then: () async {
-      app.openStory(app.stories.firstWhere((s) => s.language == 'he'));
-      await t.pumpAndSettle();
-    });
-  });
-
-  testWidgets('reader arabic', (t) async {
-    final app = await _seed();
-    app.settings.readerFont = 'amiri';
-    app.settings.sentenceTranslations = 'below';
-    await shot(t, app, 'reader_arabic', then: () async {
-      app.openStory(app.stories.firstWhere((s) => s.language == 'ar'));
       await t.pumpAndSettle();
     });
   });
@@ -266,10 +263,10 @@ void main() {
   testWidgets('reader pages', (t) async {
     final app = await _seed();
     app.settings.readerLayout = 'pages';
-    final long = List.generate(12, (i) => 'Mi abuela tiene un jardín pequeño detrás de su casa. Cada mañana sale con una taza de café y mira las flores. Dice que las plantas escuchan, por eso les habla en voz baja.').join('\n\n');
-    app.addStories(importText('El jardín\n$long', plain: const PlainTextOptions(language: 'es')).stories);
+    final long = List.generate(12, (i) => 'La meva àvia té un jardí petit darrere de casa. Cada matí surt amb una tassa de cafè i mira les flors. Diu que les plantes escolten, per això els parla en veu baixa.').join('\n\n');
+    app.addStories(importText('El jardí\n$long', plain: const PlainTextOptions(language: 'ca')).stories);
     await shot(t, app, 'reader_pages', then: () async {
-      app.openStory(app.stories.firstWhere((s) => s.title == 'El jardín'));
+      app.openStory(app.stories.firstWhere((s) => s.title == 'El jardí'));
       await t.pumpAndSettle();
       await t.tapAt(const Offset(380, 420));
       await t.pumpAndSettle();

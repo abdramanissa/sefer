@@ -826,58 +826,54 @@ class AppearanceScreen extends StatelessWidget {
         const SizedBox(height: 28),
         const Kicker('App icon'),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            for (final e in AppIcon.all.entries) ...[
-              if (e.key != AppIcon.all.keys.first) const SizedBox(width: 14),
-              Semantics(
-                button: true,
-                selected: s.appIcon == e.key,
-                label: '${e.value.$1} icon',
-                excludeSemantics: true,
-                child: Pressable(
-                  scale: 0.94,
-                  onTap: () async {
-                    if (s.appIcon == e.key) return;
-                    app.updateSettings((x) => x.appIcon = e.key);
-                    final ok = await AppIcon.set(e.key);
-                    if (!context.mounted) return;
-                    showNotchToast(
-                      context,
-                      title: ok ? '${e.value.$1} icon' : 'Icon saved',
-                      subtitle: ok ? 'Your launcher may take a moment to update' : 'Applies on the phone',
-                      icon: PhosphorIconsFill.appWindow,
-                    );
-                  },
-                  child: Column(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
+        LayoutBuilder(
+          builder: (context, box) {
+            const per = 5;
+            final size = (box.maxWidth - 10 * (per - 1)) / per;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final e in AppIcon.all.entries)
+                  Semantics(
+                    button: true,
+                    selected: s.appIcon == e.key,
+                    label: '${e.value.$1} icon',
+                    excludeSemantics: true,
+                    child: Pressable(
+                      scale: 0.92,
+                      onTap: () async {
+                        if (s.appIcon == e.key) return;
+                        app.updateSettings((x) => x.appIcon = e.key);
+                        final ok = await AppIcon.set(e.key);
+                        if (!context.mounted) return;
+                        showNotchToast(
+                          context,
+                          title: ok ? 'Icon changed' : 'Icon saved',
+                          subtitle: ok ? 'Your launcher may take a moment to update' : 'Applies on the phone',
+                          icon: PhosphorIconsFill.appWindow,
+                        );
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: size,
+                        height: size,
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(context.feel.r(24)),
-                          border: Border.all(color: s.appIcon == e.key ? c.ember : Colors.transparent, width: 2.5),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: s.appIcon == e.key ? c.accent : Colors.transparent, width: 2.5),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(context.feel.r(19)),
-                          child: Image.asset('assets/icons/${e.key}.png', width: 64, height: 64, filterQuality: FilterQuality.medium),
-                        ),
+                        child: ClipOval(child: Image.asset('assets/icons/${e.key}.png', fit: BoxFit.cover, filterQuality: FilterQuality.medium)),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        e.value.$1,
-                        style: AppTheme.f(12.5, weight: s.appIcon == e.key ? FontWeight.w800 : FontWeight.w600, color: s.appIcon == e.key ? c.text : c.textSecondary),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         Text(
-          'Both follow your phone\'s themed icons on Android 13 and later.',
+          'Each follows your phone\'s themed icons on Android 13 and later.',
           style: AppTheme.f(12, weight: FontWeight.w500, color: c.textTertiary),
         ),
         const SizedBox(height: 28),
