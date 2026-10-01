@@ -111,6 +111,7 @@ void main() {
       'settings:motion',
       'settings:about',
       'settings:ai',
+      'settings:data',
       'story:${story.id}',
     ]) {
       await _go(tester, app, r);

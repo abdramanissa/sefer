@@ -680,6 +680,8 @@ class Settings {
   String themeMode = 'dark'; // dark | light | system | custom
   String? customThemeId;
   List<CustomTheme> customThemes = [];
+  // No longer adjustable; kept at their defaults so older settings files
+  // don't leave the app in a state there's no control for.
   double uiScale = 1.0;
   String background = 'dots'; // none | dots | grid
 
@@ -799,8 +801,6 @@ class Settings {
         .whereType<Map>()
         .map((t) => CustomTheme.fromJson(t.cast<String, dynamic>()))
         .toList();
-    s.uiScale = _dbl(j['ui_scale'], s.uiScale).clamp(0.85, 1.3);
-    s.background = _str(j['background'], s.background);
     s.readerFont = _str(j['reader_font'], s.readerFont);
     s.fontSize = _dbl(j['font_size'], s.fontSize);
     s.lineHeight = _dbl(j['line_height'], s.lineHeight);
@@ -827,7 +827,6 @@ class Settings {
     s.gridColumns = _int(j['grid_columns'], s.gridColumns).clamp(2, 3);
     s.transition = _str(j['transition'], s.transition);
     s.transitionBlur = _dbl(j['transition_blur'], s.transitionBlur);
-    s.transitionMs = _int(j['transition_ms'], s.transitionMs);
     s.heatShape = _str(j['heat_shape'], s.heatShape);
     s.heatRamp = _str(j['heat_ramp'], s.heatRamp);
     s.heatMetric = _str(j['heat_metric'], s.heatMetric);
@@ -847,8 +846,6 @@ class Settings {
     s.feel = _str(j['feel'], s.feel);
     s.glass = _bool(j['glass'], s.glass);
     s.accentHex = j['accent_hex'] as String?;
-    s.roundness = _dbl(j['roundness'], s.roundness).clamp(0.4, 1.6);
-    s.uiFont = _str(j['ui_font'], s.uiFont);
     s.startTab = _str(j['start_tab'], s.startTab);
     s.lastTab = _str(j['last_tab'], s.lastTab);
     s.navStyle = _str(j['nav_style'], s.navStyle);

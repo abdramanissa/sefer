@@ -383,4 +383,16 @@ void main() {
       await t.pumpAndSettle();
     });
   });
+
+  testWidgets('profile settings grid', (t) async {
+    final app = await _seed();
+    app.settings.lastBackupAt = DateTime.now();
+    await shot(t, app, 'profile_grid', then: () async {
+      app.go('profile');
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.text('Privacy & about'), 300, scrollable: find.byType(Scrollable).first);
+      await Scrollable.ensureVisible(t.element(find.text('Privacy & about')), alignment: 0.7);
+      await t.pumpAndSettle();
+    });
+  });
 }
