@@ -45,7 +45,6 @@ class ThemeEditorScreen extends StatelessWidget {
 
     return PageScroll(
       id: 'theme-editor',
-      rise: false,
       children: [
         ScreenHeader(
           title: t.name,

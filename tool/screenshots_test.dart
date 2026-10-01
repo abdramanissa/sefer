@@ -94,10 +94,10 @@ Future<AppState> _seed() async {
   app.addStories(importText(_spanish, plain: const PlainTextOptions(language: 'es', tags: ['A2'])).stories);
   app.addStories(importText(_greek).stories);
   final covers = [
-    const Cover(kind: CoverKind.doodle, doodle: 'cup', hue: 6),
+    const Cover(kind: CoverKind.doodle, doodle: 'lake', hue: 6),
     const Cover(kind: CoverKind.pattern, seed: 3, hue: 1),
-    const Cover(kind: CoverKind.doodle, doodle: 'flower', hue: 2),
-    const Cover(kind: CoverKind.doodle, doodle: 'sun', hue: 0),
+    const Cover(kind: CoverKind.doodle, doodle: 'field', hue: 2),
+    const Cover(kind: CoverKind.doodle, doodle: 'dunes', hue: 0),
   ];
   for (var i = 0; i < app.stories.length; i++) {
     app.stories[i].cover = covers[i];
@@ -356,6 +356,30 @@ void main() {
       await t.pumpAndSettle();
       await t.scrollUntilVisible(find.text('Island'), 300, scrollable: find.byType(Scrollable).first);
       await Scrollable.ensureVisible(t.element(find.text('Island')), alignment: 0.4);
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('reader quick', (t) async {
+    final app = await _seed();
+    await shot(t, app, 'reader_quick', then: () async {
+      app.openStory(app.stories.first);
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel('Text settings'));
+      await t.pumpAndSettle();
+    });
+  });
+
+  testWidgets('reader more', (t) async {
+    final app = await _seed();
+    await shot(t, app, 'reader_more', then: () async {
+      app.openStory(app.stories.first);
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel('Text settings'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('More'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Spacing'));
       await t.pumpAndSettle();
     });
   });

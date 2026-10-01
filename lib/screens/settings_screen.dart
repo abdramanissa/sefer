@@ -1074,7 +1074,7 @@ class ReaderSettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 22),
-        const ReaderControls(),
+        ReaderSettingsTabs(language: app.activeLanguage ?? (s.learning.isNotEmpty ? s.learning.first : 'en'), pickLanguage: true),
       ],
     );
   }

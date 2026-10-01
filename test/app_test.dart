@@ -178,8 +178,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.statusOf('el', 'σας'), WordStatus.known);
 
-    await tester.scrollUntilVisible(find.textContaining('Finish'), 200, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.textContaining('Finish'));
+    await tester.scrollUntilVisible(find.bySemanticsLabel(RegExp('^Finish')), 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Finish')));
     await tester.pumpAndSettle(const Duration(seconds: 3));
     expect(story.finishedAt, isNotNull);
     expect(app.statusOf('el', 'καλημέρα'), 2);

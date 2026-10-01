@@ -60,6 +60,70 @@ class _StatsScreenState extends State<StatsScreen> {
       children: [
         const TabHeader(kicker: 'Your reading', title: 'Stats', actions: [LanguagePill(), StreakPill()]),
         const SizedBox(height: 20),
+        SoftCard(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  SegToggle<String>(
+                    value: s.heatMetric,
+                    options: const {'time': 'Time', 'words': 'Words'},
+                    onChanged: (v) => app.updateSettings((x) => x.heatMetric = v),
+                  ),
+                  const Spacer(),
+                  if (langs.length > 1)
+                    Pill(
+                      dense: true,
+                      label: _StatsState.heatLanguage == null ? 'All languages' : languageName(_StatsState.heatLanguage!),
+                      icon: PhosphorIconsBold.caretDown,
+                      onTap: () async {
+                        final v = await pickOption<String>(
+                          context,
+                          title: 'Show activity in',
+                          selected: _StatsState.heatLanguage ?? '*',
+                          items: [const OptionItem('*', 'All languages'), for (final l in langs) OptionItem(l, languageName(l))],
+                        );
+                        if (v != null) setState(() => _StatsState.heatLanguage = v == '*' ? null : v);
+                      },
+                    ),
+                  const SizedBox(width: 6),
+                  RoundBtn(icon: PhosphorIconsBold.slidersHorizontal, label: 'Chart settings', size: 34, onTap: () => showHeatmapSettings(context)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ActivityHeatmap(
+                days: app.activity,
+                weeks: s.heatWeeks,
+                cell: s.heatCell,
+                gap: s.heatGap,
+                shape: s.heatShape,
+                ramp: s.heatRamp,
+                metric: s.heatMetric,
+                goalMinutes: s.dailyGoalMinutes,
+                mondayFirst: s.weekStartsMonday,
+                language: app.scoped ? app.activeLanguage : _StatsState.heatLanguage,
+                onTapDay: (d) => _daySheet(context, d),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    '${all.activeDays} active days',
+                    style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
+                  ),
+                  HeatLegend(ramp: s.heatRamp, shape: s.heatShape),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
         // Today.
         SoftCard(
           radius: 26,
@@ -169,70 +233,6 @@ class _StatsScreenState extends State<StatsScreen> {
             ],
           ),
         ],
-        const SizedBox(height: 30),
-        SectionHeading('Activity', onTap: () => showHeatmapSettings(context)),
-        const SizedBox(height: 14),
-        SoftCard(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  SegToggle<String>(
-                    value: s.heatMetric,
-                    options: const {'time': 'Time', 'words': 'Words'},
-                    onChanged: (v) => app.updateSettings((x) => x.heatMetric = v),
-                  ),
-                  const Spacer(),
-                  if (langs.length > 1)
-                    Pill(
-                      dense: true,
-                      label: _StatsState.heatLanguage == null ? 'All languages' : languageName(_StatsState.heatLanguage!),
-                      icon: PhosphorIconsBold.caretDown,
-                      onTap: () async {
-                        final v = await pickOption<String>(
-                          context,
-                          title: 'Show activity in',
-                          selected: _StatsState.heatLanguage ?? '*',
-                          items: [const OptionItem('*', 'All languages'), for (final l in langs) OptionItem(l, languageName(l))],
-                        );
-                        if (v != null) setState(() => _StatsState.heatLanguage = v == '*' ? null : v);
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ActivityHeatmap(
-                days: app.activity,
-                weeks: s.heatWeeks,
-                cell: s.heatCell,
-                gap: s.heatGap,
-                shape: s.heatShape,
-                ramp: s.heatRamp,
-                metric: s.heatMetric,
-                goalMinutes: s.dailyGoalMinutes,
-                mondayFirst: s.weekStartsMonday,
-                language: app.scoped ? app.activeLanguage : _StatsState.heatLanguage,
-                onTapDay: (d) => _daySheet(context, d),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  Text(
-                    '${all.activeDays} active days',
-                    style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
-                  ),
-                  HeatLegend(ramp: s.heatRamp, shape: s.heatShape),
-                ],
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 30),
         Row(
           children: [

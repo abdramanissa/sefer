@@ -19,13 +19,11 @@ class PageScroll extends StatefulWidget {
     required this.id,
     required this.children,
     this.slivers = const [],
-    this.rise = true,
     this.nav = true,
   });
   final String id;
   final List<Widget> children;
   final List<Widget> slivers;
-  final bool rise;
   final bool nav;
 
   @override
@@ -52,7 +50,7 @@ class _PageScrollState extends State<PageScroll> {
           SliverPadding(
             padding: EdgeInsets.fromLTRB(g, top + 14, g, widget.slivers.isEmpty ? bottom : 0),
             sliver: SliverList(
-              delegate: SliverChildListDelegate(widget.rise ? riseAll(widget.children) : widget.children),
+              delegate: SliverChildListDelegate(widget.children),
             ),
           ),
           for (final s in widget.slivers) SliverPadding(padding: EdgeInsets.symmetric(horizontal: g), sliver: s),

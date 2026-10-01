@@ -26,8 +26,17 @@ const _fontLicenses = {
   'Varela Round': 'varelaround',
   'Rubik': 'rubik',
   'Vazirmatn': 'vazirmatn',
-  'Noto Sans Arabic': 'notosansarabic',
   'Baloo Bhaijaan 2': 'baloobhaijaan2',
+  'EB Garamond': 'ebgaramond',
+  'Poppins': 'poppins',
+  'Inter': 'inter',
+  'David Libre': 'davidlibre',
+  'Markazi Text': 'markazitext',
+  'Reem Kufi': 'reemkufi',
+  'GFS Didot': 'gfsdidot',
+  'PT Serif': 'ptserif',
+  'Noto Serif Georgian': 'notoserifgeorgian',
+  'Noto Sans Georgian': 'notosansgeorgian',
 };
 
 Future<void> main() async {

@@ -23,7 +23,7 @@ class UserFonts {
   static void _refreshList(AppState app) {
     userFonts = [
       for (final f in app.settings.customFonts)
-        ReaderFont(f.id, f.name, f.family, 'Your font', FontGroup.custom),
+        ReaderFont(f.id, f.name, f.family, 'Your font', const {}),
     ];
   }
 

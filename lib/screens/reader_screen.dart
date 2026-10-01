@@ -784,19 +784,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-Future<void> showReaderSettings(BuildContext context, Story story) {
-  final script = dominantScript(story.preview);
-  final marks = script == Script.hebrew || script == Script.arabic;
-  final sample = words(story.preview).firstOrNull;
-  return showAppSheet<void>(
-    context,
-    (ctx) => SheetBody(
-      title: 'Text',
-      children: [ReaderControls(showMarksToggle: marks, sample: sample, language: story.language)],
-    ),
-  );
-}
-
 TextStyle _readerStyle(Settings set, ReaderFont font, Color ink) => TextStyle(
   fontFamily: font.family,
   fontFamilyFallback: readerFallback,
@@ -859,6 +846,8 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// The end of a story: a slim line with how much you knew, a round check
+/// to finish, and small links to the quiz and the next story.
 class _Footer extends StatelessWidget {
   const _Footer({required this.story, required this.width});
   final Story story;
@@ -873,90 +862,98 @@ class _Footer extends StatelessWidget {
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final done = story.finishedAt != null;
     final next = app.nextAfter(story);
+    final soft = c.textSecondary;
+
+    void finish() {
+      final marked = app.finishStory(story);
+      Haptic.heavy();
+      Future.delayed(const Duration(milliseconds: 110), Haptic.light);
+      showNotchToast(
+        context,
+        title: 'Story finished',
+        subtitle: marked > 0 ? '$marked words marked known' : '${story.wordCount} words read',
+        icon: PhosphorIconsFill.checkCircle,
+        accent: c.sage,
+      );
+    }
+
     return Center(
       child: SizedBox(
         width: width,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(set.sidePadding, 12, set.sidePadding, 40 + bottom),
-          child: SoftCard(
-            radius: 26,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (context.feel.kickers) ...[Kicker(done ? 'Finished' : 'The end'), const SizedBox(height: 8)],
-                Text(done ? 'Nicely done.' : 'You reached the end.', style: AppTheme.f(22, weight: FontWeight.w800, color: c.text)),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(child: StatValue(value: '${(ws.knownRatio * 100).round()}', unit: '%', label: 'Known')),
-                    Expanded(child: StatValue(value: '${ws.learning}', label: 'Learning')),
-                    Expanded(child: StatValue(value: '${ws.fresh}', label: 'New')),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                if (!done)
-                  PrimaryButton(
-                    label: set.autoKnownOnFinish && ws.fresh > 0 ? 'Finish · ${ws.fresh} new words become known' : 'Finish',
-                    icon: PhosphorIconsBold.check,
-                    onTap: () {
-                      final marked = app.finishStory(story);
-                      Haptic.heavy();
-                      Future.delayed(const Duration(milliseconds: 110), Haptic.light);
-                      Future.delayed(const Duration(milliseconds: 220), Haptic.light);
-                      showNotchToast(
-                        context,
-                        title: 'Story finished',
-                        subtitle: marked > 0 ? '$marked words marked known' : '${story.wordCount} words read',
-                        icon: PhosphorIconsFill.checkCircle,
-                        accent: c.sage,
-                      );
-                    },
-                  )
-                else
-                  GhostButton(label: 'Read again', icon: PhosphorIconsBold.arrowCounterClockwise, onTap: () => app.resetProgress(story)),
-                if (story.quiz.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  _QuizCta(story: story, primary: done),
-                ],
-                if (next != null) ...[
-                  const SizedBox(height: 10),
-                  GhostButton(
-                    label: 'Next: ${next.title}',
-                    icon: PhosphorIconsBold.arrowRight,
-                    onTap: () {
-                      app.back();
-                      app.openStory(next);
-                    },
+          padding: EdgeInsets.fromLTRB(set.sidePadding, 8, set.sidePadding, 48 + bottom),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Divider(color: c.border.withValues(alpha: 0.6), height: 1),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(done ? 'Finished' : 'The end', style: AppTheme.f(15, weight: FontWeight.w800, color: c.text)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${(ws.knownRatio * 100).round()}% known · ${ws.learning} learning · ${ws.fresh} new',
+                          style: AppTheme.f(12, weight: FontWeight.w600, color: soft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Semantics(
+                    button: true,
+                    label: done
+                        ? 'Read again'
+                        : (set.autoKnownOnFinish && ws.fresh > 0 ? 'Finish. ${ws.fresh} new words become known' : 'Finish'),
+                    excludeSemantics: true,
+                    child: Pressable(
+                      scale: 0.9,
+                      onTap: done ? () => app.resetProgress(story) : finish,
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: done ? c.bgRaised2 : c.ember),
+                        child: Icon(
+                          done ? PhosphorIconsBold.arrowCounterClockwise : PhosphorIconsBold.check,
+                          size: 20,
+                          color: done ? c.text : c.onEmber,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                GhostButton(label: 'Back to library', icon: PhosphorIconsBold.books, onTap: () => app.go('library')),
+              ),
+              if (story.quiz.isNotEmpty || next != null) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (story.quiz.isNotEmpty)
+                      Pill(
+                        icon: PhosphorIconsBold.exam,
+                        label: story.quizBest == null ? 'Quiz · ${story.quiz.length}' : 'Quiz · best ${story.quizBest}%',
+                        onTap: () => app.go('quiz:${story.id}'),
+                      ),
+                    if (next != null)
+                      Pill(
+                        icon: PhosphorIconsBold.arrowRight,
+                        label: next.title.length > 24 ? 'Next: ${next.title.substring(0, 22)}…' : 'Next: ${next.title}',
+                        onTap: () {
+                          app.back();
+                          app.openStory(next);
+                        },
+                      ),
+                  ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
-  }
-}
-
-/// Opens the story's quiz; shows the best score once taken.
-class _QuizCta extends StatelessWidget {
-  const _QuizCta({required this.story, required this.primary});
-  final Story story;
-  final bool primary;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = story.quiz.length;
-    final best = story.quizBest;
-    final label = best == null
-        ? 'Take the quiz · $n question${n == 1 ? '' : 's'}'
-        : 'Quiz again · best $best%';
-    void open() => context.appRead.go('quiz:${story.id}');
-    return primary
-        ? PrimaryButton(label: label, icon: PhosphorIconsBold.exam, onTap: open)
-        : GhostButton(label: label, icon: PhosphorIconsBold.exam, onTap: open);
   }
 }
 
