@@ -12,6 +12,7 @@ import '../theme/feel.dart';
 import '../widgets/app_background.dart';
 import '../widgets/covers.dart';
 import '../widgets/glass.dart';
+import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
 import 'routes.dart';
 
@@ -67,6 +68,7 @@ class AppShell extends StatelessWidget {
             children: [
               Positioned.fill(child: AppBackground(pattern: feel.decor ? app.settings.background : 'none')),
               Positioned.fill(child: _ScreenSwitcher(route: app.route)),
+              const Positioned(left: 0, top: 0, child: _GenerationWatch()),
               if (app.showNav)
                 Positioned(left: 0, right: 0, bottom: 0, child: _BottomFade(visible: showNav)),
               Positioned(
@@ -86,6 +88,53 @@ class AppShell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Says when a story finishes generating while you're elsewhere.
+class _GenerationWatch extends StatefulWidget {
+  const _GenerationWatch();
+
+  @override
+  State<_GenerationWatch> createState() => _GenerationWatchState();
+}
+
+class _GenerationWatchState extends State<_GenerationWatch> {
+  bool _wasBusy = false;
+  late final AppState _app = context.appRead;
+
+  @override
+  void initState() {
+    super.initState();
+    _app.generation.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _app.generation.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    final g = _app.generation;
+    if (_wasBusy && !g.busy && _app.routeName != 'generate' && mounted) {
+      final ok = g.result != null;
+      if (ok || g.error != null) {
+        showNotchToast(
+          context,
+          title: ok ? 'Your story is ready' : 'No story this time',
+          subtitle: ok ? g.result!.stories.first.title : g.error,
+          icon: ok ? PhosphorIconsFill.sparkle : PhosphorIconsFill.warning,
+          accent: ok ? context.sc.accent : context.sc.danger,
+          action: 'Open',
+          onAction: () => _app.go('generate'),
+        );
+      }
+    }
+    _wasBusy = g.busy;
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 // ------------------------------------------------------------------ transitions

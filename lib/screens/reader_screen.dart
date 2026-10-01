@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../data/ai.dart';
 import '../data/app_state.dart';
+import '../data/translate.dart';
 import '../data/models.dart';
 import '../text/normalize.dart';
 import '../text/script.dart';
@@ -20,6 +22,7 @@ import '../widgets/glass.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
 import '../widgets/word_text.dart';
+import 'ai_settings.dart';
 import 'reader_controls.dart';
 import 'story_actions.dart';
 import 'word_card.dart';
@@ -1143,6 +1146,38 @@ class _ParagraphView extends StatelessWidget {
 
 // ------------------------------------------------------------------ sentence
 
+class _SheetTranslate extends StatefulWidget {
+  const _SheetTranslate({required this.onTranslate});
+  final Future<void> Function() onTranslate;
+
+  @override
+  State<_SheetTranslate> createState() => _SheetTranslateState();
+}
+
+class _SheetTranslateState extends State<_SheetTranslate> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    if (_busy) return SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.accent));
+    return Semantics(
+      button: true,
+      label: 'Translate',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () async {
+          setState(() => _busy = true);
+          await widget.onTranslate();
+          if (mounted) setState(() => _busy = false);
+        },
+        child: SizedBox(width: 32, height: 22, child: Icon(PhosphorIconsBold.translate, size: 17, color: c.accent)),
+      ),
+    );
+  }
+}
+
 Future<void> showSentenceSheet(BuildContext context, Story story, Sentence sentence) {
   final ctl = TextEditingController(text: sentence.translation ?? '');
   final app = context.appRead;
@@ -1165,15 +1200,39 @@ Future<void> showSentenceSheet(BuildContext context, Story story, Sentence sente
             style: TextStyle(fontFamily: font.family, fontFamilyFallback: readerFallback, fontSize: 20, height: 1.5, color: c.text),
           ),
           const SizedBox(height: 16),
-          AppField(
-            controller: ctl,
-            label: 'Translation',
-            hint: 'Add your own translation',
-            maxLines: 4,
-            minLines: 1,
-            onChanged: (v) {
-              sentence.translation = v.trim().isEmpty ? null : v.trim();
-              app.touchStory(story);
+          StatefulBuilder(
+            builder: (ctx, setField) {
+              var busy = false;
+              return AppField(
+                controller: ctl,
+                label: 'Translation',
+                hint: 'Add your own translation',
+                maxLines: 4,
+                minLines: 1,
+                onChanged: (v) {
+                  sentence.translation = v.trim().isEmpty ? null : v.trim();
+                  app.touchStory(story);
+                },
+                trailing: set.translator == Translators.off
+                    ? null
+                    : _SheetTranslate(
+                        onTranslate: () async {
+                          if (busy) return;
+                          busy = true;
+                          try {
+                            final t = await translatorFor(app).translate(sentence.text, from: story.language, to: story.translationLanguage);
+                            if (t.isEmpty) return;
+                            ctl.text = t;
+                            sentence.translation = t;
+                            app.touchStory(story);
+                          } on AiException catch (e) {
+                            if (ctx.mounted) showNotchToast(ctx, title: 'No translation', subtitle: e.message, icon: PhosphorIconsFill.warning, accent: c.danger);
+                          } finally {
+                            busy = false;
+                          }
+                        },
+                      ),
+              );
             },
           ),
           if (glossed.isNotEmpty) ...[

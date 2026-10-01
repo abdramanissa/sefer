@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../data/ai.dart';
 import '../data/app_state.dart';
+import '../data/translate.dart';
 import '../data/models.dart';
 import '../text/normalize.dart';
 import '../text/script.dart';
@@ -9,12 +11,13 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/feel.dart';
 import '../widgets/ui_kit.dart';
+import 'ai_settings.dart';
 import 'word_sheet.dart';
 
 /// A small card at the bottom of the reader: the word, its reading and
 /// meaning, and (in learning mode) its level. The text stays visible above
 /// it; "More" opens the full sheet.
-class WordCard extends StatelessWidget {
+class WordCard extends StatefulWidget {
   const WordCard({
     super.key,
     required this.story,
@@ -35,6 +38,77 @@ class WordCard extends StatelessWidget {
   final VoidCallback onMore;
 
   @override
+  State<WordCard> createState() => _WordCardState();
+}
+
+class _WordCardState extends State<WordCard> {
+  String? _wordTr;
+  bool _wordBusy = false;
+  bool _sentenceBusy = false;
+  String? _error;
+
+  Story get story => widget.story;
+  String get word => widget.word;
+  Sentence get sentence => widget.sentence;
+  bool get readMode => widget.readMode;
+  bool get sentenceOnly => widget.sentenceOnly;
+  VoidCallback get onClose => widget.onClose;
+  VoidCallback get onMore => widget.onMore;
+
+  @override
+  void initState() {
+    super.initState();
+    final app = context.appRead;
+    final s = app.settings;
+    final entry = app.entry(story.language, word);
+    final known = (entry?.meaning.isNotEmpty ?? false) || lookupLoose(sentence.glosses, word) != null;
+    if (s.translator != Translators.off && s.autoTranslate && s.internet) {
+      if (sentenceOnly) {
+        if (sentence.translation == null) WidgetsBinding.instance.addPostFrameCallback((_) => _translateSentence());
+      } else if (!known) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _translateWord());
+      }
+    }
+  }
+
+  Future<void> _translateWord() async {
+    if (_wordBusy || !mounted) return;
+    setState(() {
+      _wordBusy = true;
+      _error = null;
+    });
+    try {
+      final t = await translatorFor(context.appRead).translate(word, from: story.language, to: story.translationLanguage, context: sentence.text);
+      if (mounted) setState(() => _wordTr = t);
+    } on AiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _wordBusy = false);
+    }
+  }
+
+  Future<void> _translateSentence() async {
+    if (_sentenceBusy || !mounted) return;
+    final app = context.appRead;
+    setState(() {
+      _sentenceBusy = true;
+      _error = null;
+    });
+    try {
+      final t = await translatorFor(app).translate(sentence.text, from: story.language, to: story.translationLanguage);
+      if (t.isNotEmpty) {
+        // Kept with the story, so it's there next time without asking.
+        sentence.translation = t;
+        app.touchStory(story);
+      }
+    } on AiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _sentenceBusy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final app = context.app;
     final c = context.sc;
@@ -50,6 +124,7 @@ class WordCard extends StatelessWidget {
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final dir = isRtl(lang, word) ? TextDirection.rtl : TextDirection.ltr;
     final showSentence = sentenceOnly || readMode;
+    final canTranslate = set.translator != Translators.off;
 
     return GestureDetector(
       // Taps inside the card must not fall through to the page behind.
@@ -101,11 +176,49 @@ class WordCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: Text(
-                        meaning == null || meaning.isEmpty ? 'No meaning yet. Open details to add one.' : meaning,
-                        style: AppTheme.f(15, weight: meaning == null ? FontWeight.w500 : FontWeight.w600, color: meaning == null ? c.textTertiary : c.text, height: 1.3),
-                      ),
+                      child: meaning != null && meaning.isNotEmpty
+                          ? Text(meaning, style: AppTheme.f(15, weight: FontWeight.w600, color: c.text, height: 1.3))
+                          : _wordTr != null
+                          ? Row(
+                              children: [
+                                Icon(PhosphorIconsBold.translate, size: 13, color: c.accent),
+                                const SizedBox(width: 6),
+                                Expanded(child: Text(_wordTr!, style: AppTheme.f(15, weight: FontWeight.w600, color: c.text, height: 1.3))),
+                                Pill(
+                                  dense: true,
+                                  label: 'Keep',
+                                  icon: PhosphorIconsBold.check,
+                                  onTap: () {
+                                    app.setWord(
+                                      lang,
+                                      word,
+                                      status: entry?.status ?? 1,
+                                      meaning: _wordTr,
+                                      example: sentence.text,
+                                      exampleTranslation: sentence.translation ?? '',
+                                      storyId: story.id,
+                                    );
+                                    setState(() => _wordTr = null);
+                                  },
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    canTranslate ? 'No meaning yet.' : 'No meaning yet. Open details to add one.',
+                                    style: AppTheme.f(15, weight: FontWeight.w500, color: c.textTertiary, height: 1.3),
+                                  ),
+                                ),
+                                if (canTranslate) _TranslateBtn(busy: _wordBusy, onTap: _translateWord),
+                              ],
+                            ),
                     ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 6),
+                    Text(_error!, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTheme.f(12, weight: FontWeight.w600, color: c.danger)),
                   ],
                   if (showSentence) ...[
                     const SizedBox(height: 10),
@@ -124,10 +237,20 @@ class WordCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                           ],
-                          Text(
-                            sentence.translation ?? 'This sentence has no translation yet. Long-press in learning mode to add one.',
-                            style: AppTheme.f(13.5, weight: FontWeight.w500, color: sentence.translation == null ? c.textTertiary : c.textSecondary, height: 1.4),
-                          ),
+                          if (sentence.translation != null)
+                            Text(sentence.translation!, style: AppTheme.f(13.5, weight: FontWeight.w500, color: c.textSecondary, height: 1.4))
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    canTranslate ? 'No translation yet.' : 'This sentence has no translation yet. Long-press in learning mode to add one.',
+                                    style: AppTheme.f(13.5, weight: FontWeight.w500, color: c.textTertiary, height: 1.4),
+                                  ),
+                                ),
+                                if (canTranslate) _TranslateBtn(busy: _sentenceBusy, onTap: _translateSentence),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -175,6 +298,20 @@ class WordCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TranslateBtn extends StatelessWidget {
+  const _TranslateBtn({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => busy
+      ? Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.sc.accent)),
+        )
+      : Pill(dense: true, label: 'Translate', icon: PhosphorIconsBold.translate, onTap: onTap);
 }
 
 class _IconBtn extends StatelessWidget {

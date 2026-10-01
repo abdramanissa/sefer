@@ -314,9 +314,7 @@ void main() {
       ..gen.language = 'el'
       ..gen.topic = 'Food';
     await shot(t, app, 'generate', then: () async {
-      app.go('add');
-      await t.pumpAndSettle();
-      await t.tap(find.text('Generate').first);
+      app.go('generate');
       await t.pumpAndSettle();
     });
   });

@@ -779,7 +779,13 @@ class Settings {
   String openRouterModel = 'google/gemini-2.5-flash';
   GenOptions gen = GenOptions();
 
-  String appIcon = 'aleph'; // aleph | bet
+  // Translating words and sentences online: off | deepl | google | ai.
+  String translator = 'off';
+  String deeplKey = '';
+  String googleKey = '';
+  bool autoTranslate = false;
+
+  String appIcon = 'aleph';
   String readerLayout = 'scroll'; // scroll | pages
 
   String get aiKey => aiProvider == 'openrouter' ? openRouterKey : geminiKey;
@@ -884,7 +890,11 @@ class Settings {
     s.geminiModel = _str(j['gemini_model'], s.geminiModel);
     s.openRouterModel = _str(j['openrouter_model'], s.openRouterModel);
     if (j['gen'] is Map) s.gen = GenOptions.fromJson((j['gen'] as Map).cast<String, dynamic>());
-    s.appIcon = _str(j['app_icon'], s.appIcon) == 'bet' ? 'bet' : 'aleph';
+    s.appIcon = _str(j['app_icon'], s.appIcon);
+    s.translator = _str(j['translator'], s.translator);
+    s.deeplKey = _str(j['deepl_key']);
+    s.googleKey = _str(j['google_key']);
+    s.autoTranslate = _bool(j['auto_translate'], s.autoTranslate);
     s.readerLayout = _str(j['reader_layout'], s.readerLayout) == 'pages' ? 'pages' : 'scroll';
     return s;
   }
@@ -978,6 +988,10 @@ class Settings {
     'openrouter_model': openRouterModel,
     'gen': gen.toJson(),
     'app_icon': appIcon,
+    'translator': translator,
+    if (secrets && deeplKey.isNotEmpty) 'deepl_key': deeplKey,
+    if (secrets && googleKey.isNotEmpty) 'google_key': googleKey,
+    'auto_translate': autoTranslate,
     'reader_layout': readerLayout,
   };
 }

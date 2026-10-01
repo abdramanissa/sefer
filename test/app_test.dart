@@ -355,6 +355,7 @@ void main() {
     String? sent;
     AiClient.debugTransport = (method, url, headers, body) async {
       sent = body;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
       return (
         200,
         jsonEncode({
@@ -386,21 +387,29 @@ void main() {
     addTearDown(() => AiClient.debugTransport = null);
     await _pump(tester, app);
     await _go(tester, app, 'add');
-    await tester.tap(find.text('Generate').first);
+    await tester.tap(find.text('Generate'));
     await tester.pumpAndSettle();
+    expect(app.routeName, 'generate');
+    expect(app.showNav, isFalse);
     await tester.tap(find.text('B1'));
     await tester.pumpAndSettle();
     expect(app.settings.gen.level, 'B1');
-    final page = find.byType(Scrollable).first;
-    final button = find.widgetWithText(PrimaryButton, 'Generate');
-    await tester.scrollUntilVisible(button, 300, scrollable: page);
-    await tester.drag(page, const Offset(0, -250));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Generate'));
+    // Leave while it's writing: the answer must still arrive.
+    await _go(tester, app, 'library');
     await tester.pumpAndSettle();
-    await tester.tap(button);
+    expect(sent, contains('Oxford 3000 A1-B1 words'));
+    expect(app.generation.result?.stories.single.title, 'El mercado');
+    expect(find.text('Your story is ready'), findsOneWidget);
+    await _go(tester, app, 'generate');
+    await tester.tap(find.textContaining('Review “El mercado”'));
     await tester.pumpAndSettle();
-    expect(sent, contains('CEFR level B1'));
     expect(find.text('Ready to add'), findsOneWidget);
     expect(find.text('1-question quiz'), findsOneWidget);
+    await tester.tap(find.text('Add to library'));
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+    expect(app.stories.single.title, 'El mercado');
+    expect(app.generation.result, isNull);
     await _unmount(tester);
   });
 
@@ -413,16 +422,9 @@ void main() {
     };
     addTearDown(() => AiClient.debugTransport = null);
     await _pump(tester, app);
-    await _go(tester, app, 'add');
-    await tester.tap(find.text('Generate').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Internet is off'), findsOneWidget);
-    final button = find.widgetWithText(PrimaryButton, 'Generate');
-    final page = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(button, 300, scrollable: page);
-    await tester.drag(page, const Offset(0, -250));
-    await tester.pumpAndSettle();
-    await tester.tap(button, warnIfMissed: false);
+    await _go(tester, app, 'generate');
+    expect(find.textContaining('Internet is off'), findsOneWidget);
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Generate'), warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(called, isFalse);
     await _unmount(tester);
