@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -11,10 +13,10 @@ import '../text/script.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/covers.dart';
+import '../theme/feel.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
-import 'generate_panel.dart';
+import 'import_review.dart';
 import 'story_screen.dart';
 
 class AddScreen extends StatefulWidget {
@@ -28,7 +30,6 @@ class AddScreen extends StatefulWidget {
 class _Draft {
   static final text = TextEditingController();
   static final title = TextEditingController();
-  static String mode = 'paste'; // paste | files | generate
   static String? language;
   static String? translation;
   static List<String> tags = [];
@@ -38,6 +39,7 @@ class _AddScreenState extends State<AddScreen> {
   ImportResult? _review;
   List<String> _files = [];
   bool _guide = false;
+  Timer? _clock;
 
   String get _lang => _Draft.language ?? context.appRead.activeLanguage ?? 'und';
   String get _trans => _Draft.translation ?? context.appRead.settings.defaultTranslationLang;
@@ -48,6 +50,21 @@ class _AddScreenState extends State<AddScreen> {
     translationLanguage: _trans,
     tags: _Draft.tags,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // The Generate card shows how long a story has been cooking.
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && context.appRead.generation.busy) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
 
   void _reviewPaste() {
     FocusScope.of(context).unfocus();
@@ -87,27 +104,13 @@ class _AddScreenState extends State<AddScreen> {
   }
 
   void _save() {
-    final app = context.appRead;
     final r = _review;
     if (r == null || r.stories.isEmpty) return;
-    for (final s in r.stories) {
-      for (final t in _Draft.tags) {
-        if (!s.tags.contains(t)) s.tags.add(t);
-      }
+    saveImport(context, r, tags: _Draft.tags);
+    if (_files.isEmpty) {
+      _Draft.text.clear();
+      _Draft.title.clear();
     }
-    app.addStories(r.stories);
-    Haptic.medium();
-    showNotchToast(
-      context,
-      title: r.stories.length == 1 ? 'Added to your library' : '${r.stories.length} stories added',
-      subtitle: r.stories.length == 1 ? r.stories.first.title : null,
-      icon: PhosphorIconsFill.books,
-      accent: context.sc.sage,
-      action: r.stories.length == 1 ? 'Read' : null,
-      onAction: r.stories.length == 1 ? () => app.openStory(r.stories.first) : null,
-    );
-    _Draft.text.clear();
-    _Draft.title.clear();
     setState(() {
       _review = null;
       _files = [];
@@ -116,142 +119,133 @@ class _AddScreenState extends State<AddScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.app;
     final c = context.sc;
+    final gen = app.generation;
     final review = _review;
-    final isJson = looksLikeJson(_Draft.text.text);
+    final text = _Draft.text.text;
+    final isJson = looksLikeJson(text);
+    final genStatus = gen.busy
+        ? 'Writing… ${gen.elapsed}s'
+        : gen.result != null
+        ? 'Ready to review'
+        : gen.error != null
+        ? 'Didn’t work, tap to see'
+        : (app.settings.internet && app.settings.aiKey.isNotEmpty ? 'From a few choices' : 'Or copy the prompt');
     return PageScroll(
       id: 'add',
       children: [
         const TabHeader(kicker: 'Your texts, your way', title: 'Add', actions: [LanguagePill()]),
         const SizedBox(height: 20),
-        SegToggle<String>(
-          value: _Draft.mode,
-          expand: true,
-          options: const {'paste': 'Paste', 'files': 'Files', 'generate': 'Generate'},
-          onChanged: (v) => setState(() {
-            _Draft.mode = v;
-            _review = null;
-          }),
-        ),
-        const SizedBox(height: 18),
-        if (_Draft.mode == 'generate') ...[
-          GeneratePanel(onResult: (r) => setState(() => _review = r)),
-          if (review != null) ...[
-            const SizedBox(height: 22),
-            _Review(result: review, onSave: _save, onChanged: () => setState(() {})),
-          ],
-        ] else ...[
-          if (_Draft.mode == 'paste') ...[
-            AppField(
-              controller: _Draft.text,
-              hint: 'Paste a text, or JSON in the Sefer format (for example the answer from an AI chat).\n\n'
-                  'Put === on its own line between texts to add several at once.',
-              maxLines: null,
-              minLines: 8,
-              textDirection: isRtl('und', _Draft.text.text) ? TextDirection.rtl : null,
-              style: AppTheme.f(15, weight: FontWeight.w500, color: c.text, height: 1.5),
-              onChanged: (_) => setState(() => _review = null),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionCard(
+                icon: PhosphorIconsFill.sparkle,
+                title: 'Generate',
+                subtitle: genStatus,
+                busy: gen.busy,
+                highlight: gen.result != null,
+                onTap: () => app.go('generate'),
+              ),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Pill(
-                  label: 'Paste',
-                  icon: PhosphorIconsBold.clipboardText,
-                  onTap: () async {
-                    final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    final t = data?.text;
-                    if (t == null || t.isEmpty) return;
-                    _Draft.text.text = t;
-                    setState(() => _review = null);
-                  },
-                ),
-                const SizedBox(width: 8),
-                if (_Draft.text.text.isNotEmpty)
-                  Pill(
-                    label: 'Clear',
-                    icon: PhosphorIconsBold.x,
-                    onTap: () {
-                      _Draft.text.clear();
-                      setState(() => _review = null);
-                    },
-                  ),
-                const Spacer(),
-                if (_Draft.text.text.isNotEmpty)
-                  Text(
-                    isJson ? 'JSON' : '${_Draft.text.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
-                    style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
-                  ),
-              ],
-            ),
-          ] else ...[
-            SoftCard(
-              onTap: _pickFiles,
-              child: Column(
-                children: [
-                  Icon(PhosphorIconsRegular.filePlus, size: 34, color: c.accent),
-                  const SizedBox(height: 12),
-                  Text('Choose files', style: AppTheme.f(17, color: c.text)),
-                  const SizedBox(height: 6),
-                  Text(
-                    '.json in the Sefer format (one story or many), or plain .txt. Pick as many as you like.',
-                    textAlign: TextAlign.center,
-                    style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary, height: 1.4),
-                  ),
-                  if (_files.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _files.join(' · '),
-                      textAlign: TextAlign.center,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
-                    ),
-                  ],
-                ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionCard(
+                icon: PhosphorIconsFill.fileArrowUp,
+                title: 'Import files',
+                subtitle: _files.isEmpty ? '.json or .txt, many at once' : '${_files.length} file${_files.length == 1 ? '' : 's'} read',
+                onTap: _pickFiles,
               ),
             ),
           ],
-          const SizedBox(height: 22),
-          if (!isJson || _Draft.mode == 'files') ...[
-            Kicker(_Draft.mode == 'files' ? 'For plain text files' : 'Details'),
-            const SizedBox(height: 10),
-            ToolGroup(
-              children: [
-                if (_Draft.mode == 'paste')
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                    child: TextField(
-                      controller: _Draft.title,
-                      style: AppTheme.f(14.5, weight: FontWeight.w500, color: c.text),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Title (optional, or use the first line)',
-                        hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
-                      ),
-                    ),
-                  ),
-                ToolRow(
-                  icon: PhosphorIconsRegular.translate,
-                  label: 'Language',
-                  value: _lang == 'und' ? 'Detect from script' : languageName(_lang),
-                  onTap: () async {
-                    final l = await pickLanguage(context, title: 'Text language', selected: _lang);
-                    if (l != null) setState(() => _Draft.language = l);
-                  },
-                ),
-                ToolRow(
-                  icon: PhosphorIconsRegular.chatsCircle,
-                  label: 'Translations in',
-                  value: languageName(_trans),
-                  onTap: () async {
-                    final l = await pickLanguage(context, title: 'Translation language', selected: _trans);
-                    if (l != null) setState(() => _Draft.translation = l);
-                  },
-                ),
-              ],
-            ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            const Expanded(child: Kicker('Paste or write')),
+            if (text.isNotEmpty)
+              Text(
+                isJson ? 'JSON' : '${text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
+                style: AppTheme.f(12, weight: FontWeight.w600, color: c.textTertiary),
+              ),
           ],
+        ),
+        const SizedBox(height: 10),
+        AppField(
+          controller: _Draft.text,
+          hint: 'A text, or JSON in the Sefer format (for example the answer from an AI chat).\n\n'
+              'Put === on its own line between texts to add several at once.',
+          maxLines: null,
+          minLines: 7,
+          textDirection: isRtl('und', text) ? TextDirection.rtl : null,
+          style: AppTheme.f(15, weight: FontWeight.w500, color: c.text, height: 1.5),
+          onChanged: (_) => setState(() => _review = null),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Pill(
+              label: 'Paste',
+              icon: PhosphorIconsBold.clipboardText,
+              onTap: () async {
+                final data = await Clipboard.getData(Clipboard.kTextPlain);
+                final t = data?.text;
+                if (t == null || t.isEmpty) return;
+                _Draft.text.text = t;
+                setState(() => _review = null);
+              },
+            ),
+            const SizedBox(width: 8),
+            if (text.isNotEmpty)
+              Pill(
+                label: 'Clear',
+                icon: PhosphorIconsBold.x,
+                onTap: () {
+                  _Draft.text.clear();
+                  setState(() => _review = null);
+                },
+              ),
+          ],
+        ),
+        if (text.trim().isNotEmpty && !isJson) ...[
+          const SizedBox(height: 18),
+          ToolGroup(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                child: TextField(
+                  controller: _Draft.title,
+                  style: AppTheme.f(14.5, weight: FontWeight.w500, color: c.text),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'Title (optional, or use the first line)',
+                    hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
+                  ),
+                ),
+              ),
+              ToolRow(
+                icon: PhosphorIconsRegular.translate,
+                label: 'Language',
+                value: _lang == 'und' ? 'Detect from script' : languageName(_lang),
+                onTap: () async {
+                  final l = await pickLanguage(context, title: 'Text language', selected: _lang);
+                  if (l != null) setState(() => _Draft.language = l);
+                },
+              ),
+              ToolRow(
+                icon: PhosphorIconsRegular.chatsCircle,
+                label: 'Translations in',
+                value: languageName(_trans),
+                onTap: () async {
+                  final l = await pickLanguage(context, title: 'Translation language', selected: _trans);
+                  if (l != null) setState(() => _Draft.translation = l);
+                },
+              ),
+            ],
+          ),
+        ],
+        if (text.trim().isNotEmpty || _files.isNotEmpty) ...[
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,
@@ -269,164 +263,79 @@ class _AddScreenState extends State<AddScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          if (_Draft.mode == 'paste')
-            PrimaryButton(
-              label: 'Review',
-              icon: PhosphorIconsBold.eye,
-              onTap: _Draft.text.text.trim().isEmpty ? null : _reviewPaste,
-            ),
-          if (review != null) ...[
-            const SizedBox(height: 22),
-            _Review(result: review, onSave: _save, onChanged: () => setState(() {})),
-          ],
-          const SizedBox(height: 26),
-          _FormatGuide(
-            open: _guide,
-            onToggle: () => setState(() => _guide = !_guide),
-            onTry: () => setState(() {
-              _Draft.mode = 'paste';
-              _Draft.text.text = _example;
-              _review = null;
-            }),
-          ),
         ],
+        if (text.trim().isNotEmpty && review == null) ...[
+          const SizedBox(height: 20),
+          PrimaryButton(label: 'Review', icon: PhosphorIconsBold.eye, onTap: _reviewPaste),
+        ],
+        if (review != null) ...[
+          const SizedBox(height: 22),
+          ImportReview(result: review, onSave: _save, onChanged: () => setState(() {})),
+        ],
+        const SizedBox(height: 26),
+        _FormatGuide(
+          open: _guide,
+          onToggle: () => setState(() => _guide = !_guide),
+          onTry: () => setState(() {
+            _Draft.text.text = _example;
+            _review = null;
+          }),
+        ),
       ],
     );
   }
 }
 
-class _Review extends StatelessWidget {
-  const _Review({required this.result, required this.onSave, required this.onChanged});
-  final ImportResult result;
-  final VoidCallback onSave;
-  final VoidCallback onChanged;
+/// One of the two ways in at the top of Add.
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({required this.icon, required this.title, required this.subtitle, required this.onTap, this.busy = false, this.highlight = false});
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool busy;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final c = context.sc;
-    final n = result.stories.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionHeading(n == 0 ? 'Nothing to add' : (n == 1 ? 'Ready to add' : '$n stories ready')),
-        const SizedBox(height: 12),
-        for (final s in result.stories.take(30))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: c.bgRaised, borderRadius: BorderRadius.circular(16)),
-              child: Row(
-                children: [
-                  SizedBox(width: 42, height: 56, child: StoryCover(cover: s.cover, title: s.title, radius: 8, showTitle: false)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Pressable(
-                          scale: 0.98,
-                          onTap: () async {
-                            final t = await askText(context, title: 'Title', initial: s.title, action: 'Rename');
-                            if (t != null && t.trim().isNotEmpty) {
-                              s.title = t.trim();
-                              onChanged();
-                            }
-                          },
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  s.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textDirection: isRtl(s.language, s.title) ? TextDirection.rtl : TextDirection.ltr,
-                                  style: AppTheme.f(14.5, weight: FontWeight.w700, color: c.text),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Icon(PhosphorIconsBold.pencilSimple, size: 12, color: c.textTertiary),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            LangBadge(s.language),
-                            Text(
-                              '${s.wordCount} words · ${s.sentenceCount} sentences',
-                              style: AppTheme.f(12, weight: FontWeight.w500, color: c.textSecondary),
-                            ),
-                            if (context.app.duplicateOf(s) != null) _Chip('already in library', c.warn),
-                            if (s.hasTranslations) _Chip('translated', c.sage),
-                            if (s.paragraphs.any((p) => p.sentences.any((x) => x.glosses.isNotEmpty))) _Chip('glosses', c.info),
-                            if (s.paragraphs.any((p) => p.sentences.any((x) => x.transliterations.isNotEmpty)))
-                              _Chip('transliteration', c.brass),
-                            if (s.quiz.isNotEmpty) _Chip('${s.quiz.length}-question quiz', c.accent),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+    return Semantics(
+      button: true,
+      label: '$title. $subtitle',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.97,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          height: 128,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: highlight ? c.accentSoft : c.bgRaised,
+            borderRadius: BorderRadius.circular(context.feel.r(22)),
+            border: Border.all(color: highlight ? c.accent : Colors.transparent, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: c.accent.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(context.feel.r(13))),
+                child: busy
+                    ? Padding(padding: const EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 2.2, color: c.accent))
+                    : Icon(icon, size: 20, color: c.accent),
               ),
-            ),
+              const Spacer(),
+              Text(title, style: AppTheme.f(16, weight: FontWeight.w800, color: c.text)),
+              const SizedBox(height: 2),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(12, weight: FontWeight.w500, color: c.textSecondary)),
+            ],
           ),
-        if (n > 30)
-          Text('and ${n - 30} more', textAlign: TextAlign.center, style: AppTheme.f(12.5, weight: FontWeight.w600, color: c.textTertiary)),
-        if (result.problems.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: c.warn.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(PhosphorIconsFill.warning, size: 16, color: c.warn),
-                    const SizedBox(width: 8),
-                    Text('Notes', style: AppTheme.f(13.5, color: c.warn)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                for (final p in result.problems.take(12))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text('· $p', style: AppTheme.f(12.5, weight: FontWeight.w500, color: c.textSecondary, height: 1.4)),
-                  ),
-              ],
-            ),
-          ),
-        ],
-        if (n > 0) ...[
-          const SizedBox(height: 14),
-          PrimaryButton(
-            label: n == 1 ? 'Add to library' : 'Add $n stories',
-            icon: PhosphorIconsBold.plus,
-            onTap: onSave,
-          ),
-        ],
-      ],
+        ),
+      ),
     );
   }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip(this.label, this.color);
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-    decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(100)),
-    child: Text(label, style: AppTheme.f(10.5, weight: FontWeight.w700, color: color)),
-  );
 }
 
 const _example = '''{

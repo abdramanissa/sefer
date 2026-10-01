@@ -2,65 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'ui_kit.dart';
 
-/// Content that rises into place: fade, move up 22 px, scale from 0.97
-/// (DESIGN.md §8.3). [index] staggers siblings; capped at 7.
-class Rise extends StatefulWidget {
-  const Rise({super.key, required this.child, this.index = 0, this.enabled = true});
-  final Widget child;
-  final int index;
-  final bool enabled;
-
-  @override
-  State<Rise> createState() => _RiseState();
-}
-
-class _RiseState extends State<Rise> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 560),
-  );
-  bool _started = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    if (!widget.enabled || Motion.reduced(context) || !RiseScope.shouldPlay(context)) {
-      _c.value = 1;
-      return;
-    }
-    Future.delayed(Duration(milliseconds: 40 + widget.index.clamp(0, 7) * 70), () {
-      if (mounted) _c.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _c,
-    child: widget.child,
-    builder: (context, child) {
-      final t = Curves.easeOutCubic.transform(_c.value);
-      if (t == 1) return child!;
-      return Opacity(
-        opacity: t,
-        child: Transform.translate(
-          offset: Offset(0, 22 * (1 - t)),
-          child: Transform.scale(scale: 0.97 + 0.03 * t, child: child),
-        ),
-      );
-    },
-  );
-}
-
-/// Plays [Rise] once per screen per app session, so entrances greet you but
-/// don't repeat on every tab switch.
+/// Plays entrance animations (the counting numbers) once per screen per app
+/// session, so they greet you but don't repeat on every tab switch.
 class RiseScope extends InheritedWidget {
   const RiseScope({super.key, required this.id, required super.child});
   final String id;
@@ -77,15 +20,6 @@ class RiseScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(RiseScope oldWidget) => false;
-}
-
-/// Wraps [children] in staggered [Rise]s, skipping plain spacers.
-List<Widget> riseAll(List<Widget> children) {
-  var i = 0;
-  return [
-    for (final c in children)
-      if (c is SizedBox && c.child == null) c else Rise(index: i++, child: c),
-  ];
 }
 
 /// Text whose characters roll vertically when the value changes

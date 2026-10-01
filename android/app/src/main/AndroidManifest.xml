@@ -37,7 +37,8 @@
                 <data android:scheme="sefer-dev"/>
             </intent-filter>
         </activity>
-        <!-- One alias per app icon; AppIcon in MainActivity.kt enables one. -->
+        <!-- One alias per app icon; AppIcon in MainActivity.kt enables one.
+             Generated with the icon list in tool/icon/make_icons.py. -->
         <activity-alias
             android:name=".IconAleph"
             android:targetActivity=".MainActivity"
@@ -53,6 +54,149 @@
             android:name=".IconBet"
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher_bet"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconLamed"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_lamed"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconTav"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_tav"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconOmega"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_omega"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconPe"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_pe"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconKo"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ko"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconDe"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_de"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconEszett"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_eszett"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconEacute"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_eacute"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconQ"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_q"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconAni"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ani"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconHiragana"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_hiragana"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconHangul"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_hangul"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconDevanagari"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_devanagari"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

@@ -20,7 +20,6 @@ import '../widgets/common.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
 import 'reader_controls.dart';
-import 'stats_screen.dart';
 import 'story_actions.dart';
 import 'story_screen.dart';
 import 'words_screen.dart';
@@ -46,41 +45,48 @@ class ProfileScreen extends StatelessWidget {
       children: [
         if (!isTab) ...[ScreenHeader(title: 'Profile', onBack: app.back), SizedBox(height: feel.gap)],
         // Who you are.
-        Row(
-          children: [
-            Pressable(
-              scale: 0.94,
-              onTap: () => _editProfile(context),
-              child: _Avatar(name: name, emoji: s.profileEmoji, hue: s.profileHue, size: 64),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        SoftCard(
+          radius: 28,
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(feel.titleSize - 2, weight: FontWeight.w800, color: c.text)),
-                  const SizedBox(height: 4),
-                  Text(
-                    langs.isEmpty ? 'Add the languages you study' : 'Studying ${langs.map(languageName).join(', ')}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary),
+                  Pressable(
+                    scale: 0.94,
+                    onTap: () => _editProfile(context),
+                    child: _Avatar(name: name, emoji: s.profileEmoji, hue: s.profileHue, size: 64),
                   ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(22, weight: FontWeight.w800, color: c.text)),
+                        const SizedBox(height: 3),
+                        Text(
+                          langs.isEmpty ? 'Add the languages you study' : 'Studying ${langs.map(languageName).join(', ')}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  RoundBtn(icon: PhosphorIconsRegular.pencilSimple, label: 'Edit profile', onTap: () => _editProfile(context)),
                 ],
               ),
-            ),
-            RoundBtn(icon: PhosphorIconsRegular.pencilSimple, label: 'Edit profile', onTap: () => _editProfile(context)),
-          ],
-        ),
-        SizedBox(height: feel.gap + 4),
-        Row(
-          children: [
-            Expanded(child: _Mini(value: '${app.dailyStreak}', label: 'Day streak', icon: PhosphorIconsFill.flame, color: c.accent, onTap: () => app.go('stats'))),
-            SizedBox(width: feel.gap * 0.7),
-            Expanded(child: _Mini(value: '${app.knownCount(app.scoped ? app.activeLanguage : null)}', label: 'Known words', icon: PhosphorIconsFill.checkCircle, color: c.sage, onTap: () => app.go('words'))),
-            SizedBox(width: feel.gap * 0.7),
-            Expanded(child: _Mini(value: '${app.visibleStories.length}', label: 'Stories', icon: PhosphorIconsFill.books, color: c.brass, onTap: () => app.go('library'))),
-          ],
+              const SizedBox(height: 16),
+              Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _Mini(value: '${app.dailyStreak}', label: 'Day streak', icon: PhosphorIconsFill.flame, color: c.accent, onTap: () => app.go('stats'))),
+                  Expanded(child: _Mini(value: '${app.knownCount(app.scoped ? app.activeLanguage : null)}', label: 'Known words', icon: PhosphorIconsFill.checkCircle, color: c.sage, onTap: () => app.go('words'))),
+                  Expanded(child: _Mini(value: '${app.visibleStories.length}', label: 'Stories', icon: PhosphorIconsFill.books, color: c.brass, onTap: () => app.go('library'))),
+                ],
+              ),
+            ],
+          ),
         ),
         if (backupDue) ...[
           SizedBox(height: feel.gap),
@@ -107,30 +113,32 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
         SizedBox(height: feel.section),
-        // Languages.
-        const Kicker('Languages'),
-        const SizedBox(height: 10),
-        ToolGroup(
+        // Languages, as chips.
+        SectionHeading('Languages'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             for (final l in langs)
-              ToolRow(
-                icon: l == app.activeLanguage ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
-                label: languageName(l),
-                detail: [
-                  if (l == app.activeLanguage) 'Studying now',
-                  '${app.knownCount(l)} known',
-                  if (s.fontByLanguage[l] != null) readerFontById(s.fontByLanguage[l]!).label,
-                ].join(' · '),
+              _LangChip(
+                code: l,
+                active: l == app.activeLanguage,
                 onTap: () => _languageSheet(context, l),
               ),
-            ToolRow(
-              icon: PhosphorIconsRegular.plus,
-              label: 'Add a language',
+            Pill(
+              label: 'Add',
+              icon: PhosphorIconsBold.plus,
               onTap: () async {
                 final l = await pickLanguage(context, title: 'Language you study');
                 if (l != null) app.updateSettings((x) => x.learning.contains(l) ? null : x.learning.add(l));
               },
             ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ToolGroup(
+          children: [
             ToolRow(
               icon: PhosphorIconsRegular.house,
               label: 'Your own language',
@@ -145,15 +153,10 @@ class ProfileScreen extends StatelessWidget {
                 }
               },
             ),
-          ],
-        ),
-        SizedBox(height: feel.gap),
-        ToolGroup(
-          children: [
             ToolRow(
               icon: PhosphorIconsRegular.eyeSlash,
-              label: 'Show only the language I\'m studying now',
-              detail: 'Other languages stay out of sight in the library, words and stats. Handy when someone looks over your shoulder.',
+              label: 'Only show the language I\'m studying',
+              detail: 'Hides the others in the library, words and stats',
               trailing: TinySwitch(
                 value: s.languageScope == 'active',
                 onChanged: (v) => app.updateSettings((x) => x.languageScope = v ? 'active' : 'all'),
@@ -162,112 +165,59 @@ class ProfileScreen extends StatelessWidget {
           ],
         ),
         SizedBox(height: feel.section),
-        const Kicker('Look and feel'),
-        const SizedBox(height: 10),
-        ToolGroup(
+        SectionHeading('Settings'),
+        const SizedBox(height: 12),
+        GridView.count(
+          padding: EdgeInsets.zero,
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
           children: [
-            ToolRow(icon: PhosphorIconsRegular.palette, label: 'Appearance', value: '${_themeName(app)} · ${Feel.byId(s.feel).label}', onTap: () => app.go('settings:appearance')),
-            ToolRow(
-              icon: PhosphorIconsRegular.textAa,
-              label: 'Reader',
-              value: '${readerFontById(s.readerFont).label} · ${s.fontSize.round()}',
+            _CategoryTile(
+              icon: PhosphorIconsFill.palette,
+              color: c.accent,
+              title: 'Appearance',
+              summary: '${_themeName(app)} · ${Feel.byId(s.feel).label}',
+              onTap: () => app.go('settings:appearance'),
+            ),
+            _CategoryTile(
+              icon: PhosphorIconsFill.bookOpenText,
+              color: c.sage,
+              title: 'Reading',
+              summary: 'Goal ${s.dailyGoalMinutes} min · text ${s.fontSize.round()}',
               onTap: () => app.go('settings:reader'),
             ),
-            ToolRow(icon: PhosphorIconsRegular.layout, label: 'Navigation', value: '${s.tabs.length} tabs', onTap: () => app.go('settings:layout')),
-            ToolRow(icon: PhosphorIconsRegular.sparkle, label: 'Transitions', value: _transitionName(s.transition), onTap: () => app.go('settings:motion')),
-            ToolRow(
-              icon: s.internet ? PhosphorIconsRegular.globe : PhosphorIconsRegular.globeX,
-              label: 'Internet & AI',
-              value: s.internet ? 'On' : 'Off',
+            _CategoryTile(
+              icon: PhosphorIconsFill.compass,
+              color: c.info,
+              title: 'Navigation',
+              summary: '${s.tabs.length} tabs · ${_transitionName(s.transition).toLowerCase()}',
+              onTap: () => app.go('settings:layout'),
+            ),
+            _CategoryTile(
+              icon: s.internet ? PhosphorIconsFill.globe : PhosphorIconsFill.globeX,
+              color: c.brass,
+              title: 'Internet & AI',
+              summary: s.internet ? 'On · ${s.translator == 'off' ? 'stories' : 'stories, translation'}' : 'Off',
               onTap: () => app.go('settings:ai'),
             ),
-            ToolRow(icon: PhosphorIconsRegular.squaresFour, label: 'Activity chart', value: '${s.heatWeeks} weeks', onTap: () => showHeatmapSettings(context)),
-          ],
-        ),
-        SizedBox(height: feel.section),
-        const Kicker('Learning'),
-        const SizedBox(height: 10),
-        ToolGroup(
-          children: [
-            ToolRow(
-              icon: PhosphorIconsRegular.target,
-              label: 'Daily goal',
-              trailing: StepperControl(
-                value: s.dailyGoalMinutes.toDouble(),
-                min: 5,
-                max: 180,
-                step: 5,
-                format: (v) => '${v.round()}m',
-                onChanged: (v) => app.updateSettings((x) => x.dailyGoalMinutes = v.round()),
-              ),
+            _CategoryTile(
+              icon: PhosphorIconsFill.hardDrives,
+              color: c.warn,
+              title: 'Your data',
+              summary: s.lastBackupAt == null ? 'Never backed up' : 'Backed up ${_ago(s.lastBackupAt!)}',
+              onTap: () => app.go('settings:data'),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.flame,
-              label: 'Streak needs the goal',
-              detail: 'Off: any reading keeps it alive',
-              trailing: TinySwitch(value: s.streakNeedsGoal, onChanged: (v) => app.updateSettings((x) => x.streakNeedsGoal = v)),
+            _CategoryTile(
+              icon: PhosphorIconsFill.shieldCheck,
+              color: c.textSecondary,
+              title: 'Privacy & about',
+              summary: s.internet ? 'Online when you ask' : 'Fully offline',
+              onTap: () => app.go('settings:about'),
             ),
-            ToolRow(
-              icon: PhosphorIconsRegular.checkCircle,
-              label: 'Finishing marks new words known',
-              detail: 'Words you never tapped are ones you understood',
-              trailing: TinySwitch(value: s.autoKnownOnFinish, onChanged: (v) => app.updateSettings((x) => x.autoKnownOnFinish = v)),
-            ),
-          ],
-        ),
-        SizedBox(height: feel.section),
-        const Kicker('Your data'),
-        const SizedBox(height: 10),
-        ToolGroup(
-          children: [
-            ToolRow(
-              icon: PhosphorIconsRegular.cloudArrowDown,
-              label: 'Back up everything',
-              detail: s.lastBackupAt == null ? 'Never backed up' : 'Last: ${_ago(s.lastBackupAt!)}',
-              onTap: () => _backup(context),
-            ),
-            ToolRow(icon: PhosphorIconsRegular.cloudArrowUp, label: 'Restore a backup', onTap: () => _restore(context)),
-            ToolRow(
-              icon: PhosphorIconsRegular.bellSimple,
-              label: 'Remind me to back up',
-              value: s.backupReminderDays == 0 ? 'Never' : 'Every ${s.backupReminderDays} days',
-              onTap: () async {
-                final v = await pickOption<int>(context, title: 'Backup reminder', selected: s.backupReminderDays, items: const [
-                  OptionItem(7, 'Every week'),
-                  OptionItem(14, 'Every two weeks'),
-                  OptionItem(30, 'Every month'),
-                  OptionItem(0, 'Never'),
-                ]);
-                if (v != null) app.updateSettings((x) => x.backupReminderDays = v);
-              },
-            ),
-            ToolRow(
-              icon: PhosphorIconsRegular.export,
-              label: 'Export all stories',
-              detail: 'In the import format',
-              onTap: app.stories.isEmpty ? null : () => exportStoriesFlow(context, app.stories),
-            ),
-            ToolRow(icon: PhosphorIconsRegular.cards, label: 'Export words to Anki', onTap: () => showAnkiExport(context)),
-            ToolRow(icon: PhosphorIconsRegular.trash, label: 'Erase everything', danger: true, onTap: () => _wipe(context)),
-          ],
-        ),
-        SizedBox(height: feel.section),
-        const Kicker('App'),
-        const SizedBox(height: 10),
-        ToolGroup(
-          children: [
-            ToolRow(
-              icon: PhosphorIconsRegular.vibrate,
-              label: 'Haptics',
-              trailing: TinySwitch(value: s.haptics, onChanged: (v) => app.updateSettings((x) => x.haptics = v)),
-            ),
-            ToolRow(
-              icon: PhosphorIconsRegular.personSimpleWalk,
-              label: 'Reduce motion',
-              detail: 'Also follows your system setting',
-              trailing: TinySwitch(value: s.reduceMotion, onChanged: (v) => app.updateSettings((x) => x.reduceMotion = v)),
-            ),
-            ToolRow(icon: PhosphorIconsRegular.shieldCheck, label: 'Privacy and about', onTap: () => app.go('settings:about')),
           ],
         ),
       ],
@@ -294,7 +244,7 @@ class ProfileScreen extends StatelessWidget {
     _ => 'Blur',
   };
 
-  Future<void> _editProfile(BuildContext context) async {
+  static Future<void> _editProfile(BuildContext context) async {
     final app = context.appRead;
     final s = app.settings;
     final nameCtl = TextEditingController(text: s.profileName);
@@ -377,7 +327,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _languageSheet(BuildContext context, String lang) => showAppSheet<void>(
+  static Future<void> _languageSheet(BuildContext context, String lang) => showAppSheet<void>(
     context,
     (ctx) {
       final app = ctx.app;
@@ -413,19 +363,16 @@ class ProfileScreen extends StatelessWidget {
               ToolRow(
                 icon: PhosphorIconsRegular.textAa,
                 label: 'Reader font',
-                value: s.fontByLanguage[lang] == null ? 'Default' : readerFontById(s.fontByLanguage[lang]!).label,
+                value: readerFontFor(s.fontByLanguage, s.readerFont, lang).label,
                 onTap: () async {
+                  final current = readerFontFor(s.fontByLanguage, s.readerFont, lang);
                   final v = await pickOption<String>(
                     ctx,
                     title: 'Font for ${languageName(lang)}',
-                    selected: s.fontByLanguage[lang] ?? '',
-                    items: [
-                      OptionItem('', 'Same as everything else', detail: readerFontById(s.readerFont).label),
-                      for (final f in allReaderFonts) OptionItem(f.id, f.label, detail: f.note),
-                    ],
+                    selected: current.id,
+                    items: [for (final f in fontsFor(fontScriptOf(lang))) OptionItem(f.id, f.label, detail: f.note)],
                   );
-                  if (v == null) return;
-                  app.updateSettings((x) => v.isEmpty ? x.fontByLanguage.remove(lang) : x.fontByLanguage[lang] = v);
+                  if (v != null) app.updateSettings((x) => x.fontByLanguage[lang] = v);
                 },
               ),
             ],
@@ -455,7 +402,7 @@ class ProfileScreen extends StatelessWidget {
     },
   );
 
-  Future<void> _backup(BuildContext context) async {
+  static Future<void> _backup(BuildContext context) async {
     final app = context.appRead;
     final how = await pickOption<String>(
       context,
@@ -480,7 +427,7 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _restore(BuildContext context) async {
+  static Future<void> _restore(BuildContext context) async {
     final app = context.appRead;
     final f = await Io.pickJson();
     if (f == null || !context.mounted) return;
@@ -530,7 +477,7 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _wipe(BuildContext context) async {
+  static Future<void> _wipe(BuildContext context) async {
     final app = context.appRead;
     final ok = await askConfirm(
       context,
@@ -544,6 +491,156 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
+
+class _LangChip extends StatelessWidget {
+  const _LangChip({required this.code, required this.active, required this.onTap});
+  final String code;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: '${languageName(code)}${active ? ', studying now' : ''}',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.95,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+          decoration: BoxDecoration(
+            color: active ? c.accentSoft : c.bgRaised,
+            borderRadius: BorderRadius.circular(context.feel.pill(40)),
+            border: Border.all(color: active ? c.accent : c.border.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LangBadge(code),
+              const SizedBox(width: 8),
+              Text(languageName(code), style: AppTheme.f(13.5, weight: FontWeight.w700, color: c.text)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A settings category on the profile page.
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({required this.icon, required this.color, required this.title, required this.summary, required this.onTap});
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    return Semantics(
+      button: true,
+      label: '$title. $summary',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.97,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: c.bgRaised, borderRadius: BorderRadius.circular(context.feel.r(22))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(context.feel.r(12))),
+                child: Icon(icon, size: 19, color: color),
+              ),
+              const Spacer(),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(15, weight: FontWeight.w800, color: c.text)),
+              const SizedBox(height: 2),
+              Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(12, weight: FontWeight.w500, color: c.textSecondary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------ data
+
+class DataScreen extends StatelessWidget {
+  const DataScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app;
+    final s = app.settings;
+    final c = context.sc;
+    return PageScroll(
+      id: 'settings-data',
+      children: [
+        ScreenHeader(title: 'Your data', onBack: app.back),
+        const SizedBox(height: 16),
+        Text(
+          'Everything lives in this app\'s private storage. Back it up to a file you keep, or take your stories and words elsewhere.',
+          style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary, height: 1.45),
+        ),
+        const SizedBox(height: 18),
+        ToolGroup(
+          children: [
+            ToolRow(
+              icon: PhosphorIconsRegular.cloudArrowDown,
+              label: 'Back up everything',
+              detail: s.lastBackupAt == null ? 'Never backed up' : 'Last: ${ProfileScreen._ago(s.lastBackupAt!)}',
+              onTap: () => ProfileScreen._backup(context),
+            ),
+            ToolRow(icon: PhosphorIconsRegular.cloudArrowUp, label: 'Restore a backup', onTap: () => ProfileScreen._restore(context)),
+            ToolRow(
+              icon: PhosphorIconsRegular.bellSimple,
+              label: 'Remind me to back up',
+              value: s.backupReminderDays == 0 ? 'Never' : 'Every ${s.backupReminderDays} days',
+              onTap: () async {
+                final v = await pickOption<int>(context, title: 'Backup reminder', selected: s.backupReminderDays, items: const [
+                  OptionItem(7, 'Every week'),
+                  OptionItem(14, 'Every two weeks'),
+                  OptionItem(30, 'Every month'),
+                  OptionItem(0, 'Never'),
+                ]);
+                if (v != null) app.updateSettings((x) => x.backupReminderDays = v);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ToolGroup(
+          children: [
+            ToolRow(
+              icon: PhosphorIconsRegular.export,
+              label: 'Export all stories',
+              detail: 'In the import format',
+              onTap: app.stories.isEmpty ? null : () => exportStoriesFlow(context, app.stories),
+            ),
+            ToolRow(icon: PhosphorIconsRegular.cards, label: 'Export words to Anki', onTap: () => showAnkiExport(context)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ToolGroup(
+          children: [
+            ToolRow(icon: PhosphorIconsRegular.trash, label: 'Erase everything', danger: true, onTap: () => ProfileScreen._wipe(context)),
+          ],
+        ),
+      ],
+    );
+  }
+}
 
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.name, required this.emoji, required this.hue, required this.size});
@@ -579,18 +676,27 @@ class _Mini extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.sc;
-    return SoftCard(
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(height: 8),
-          Text(value, style: AppTheme.f(20, weight: FontWeight.w800, color: c.text)),
-          const SizedBox(height: 2),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(11.5, weight: FontWeight.w600, color: c.textTertiary)),
-        ],
+    return Semantics(
+      button: true,
+      label: '$value $label',
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.95,
+        onTap: onTap,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Text(value, style: AppTheme.f(20, weight: FontWeight.w800, color: c.text)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.f(11.5, weight: FontWeight.w600, color: c.textTertiary)),
+          ],
+        ),
       ),
     );
   }
@@ -720,58 +826,54 @@ class AppearanceScreen extends StatelessWidget {
         const SizedBox(height: 28),
         const Kicker('App icon'),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            for (final e in AppIcon.all.entries) ...[
-              if (e.key != AppIcon.all.keys.first) const SizedBox(width: 14),
-              Semantics(
-                button: true,
-                selected: s.appIcon == e.key,
-                label: '${e.value.$1} icon',
-                excludeSemantics: true,
-                child: Pressable(
-                  scale: 0.94,
-                  onTap: () async {
-                    if (s.appIcon == e.key) return;
-                    app.updateSettings((x) => x.appIcon = e.key);
-                    final ok = await AppIcon.set(e.key);
-                    if (!context.mounted) return;
-                    showNotchToast(
-                      context,
-                      title: ok ? '${e.value.$1} icon' : 'Icon saved',
-                      subtitle: ok ? 'Your launcher may take a moment to update' : 'Applies on the phone',
-                      icon: PhosphorIconsFill.appWindow,
-                    );
-                  },
-                  child: Column(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
+        LayoutBuilder(
+          builder: (context, box) {
+            const per = 5;
+            final size = (box.maxWidth - 10 * (per - 1)) / per;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final e in AppIcon.all.entries)
+                  Semantics(
+                    button: true,
+                    selected: s.appIcon == e.key,
+                    label: '${e.value.$1} icon',
+                    excludeSemantics: true,
+                    child: Pressable(
+                      scale: 0.92,
+                      onTap: () async {
+                        if (s.appIcon == e.key) return;
+                        app.updateSettings((x) => x.appIcon = e.key);
+                        final ok = await AppIcon.set(e.key);
+                        if (!context.mounted) return;
+                        showNotchToast(
+                          context,
+                          title: ok ? 'Icon changed' : 'Icon saved',
+                          subtitle: ok ? 'Your launcher may take a moment to update' : 'Applies on the phone',
+                          icon: PhosphorIconsFill.appWindow,
+                        );
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: size,
+                        height: size,
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(context.feel.r(24)),
-                          border: Border.all(color: s.appIcon == e.key ? c.ember : Colors.transparent, width: 2.5),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: s.appIcon == e.key ? c.accent : Colors.transparent, width: 2.5),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(context.feel.r(19)),
-                          child: Image.asset('assets/icons/${e.key}.png', width: 64, height: 64, filterQuality: FilterQuality.medium),
-                        ),
+                        child: ClipOval(child: Image.asset('assets/icons/${e.key}.png', fit: BoxFit.cover, filterQuality: FilterQuality.medium)),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        e.value.$1,
-                        style: AppTheme.f(12.5, weight: s.appIcon == e.key ? FontWeight.w800 : FontWeight.w600, color: s.appIcon == e.key ? c.text : c.textSecondary),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         Text(
-          'Both follow your phone\'s themed icons on Android 13 and later.',
+          'Each follows your phone\'s themed icons on Android 13 and later.',
           style: AppTheme.f(12, weight: FontWeight.w500, color: c.textTertiary),
         ),
         const SizedBox(height: 28),
@@ -808,42 +910,7 @@ class AppearanceScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 28),
-        const Kicker('Shape and type'),
-        const SizedBox(height: 10),
-        ToolGroup(
-          children: [
-            SliderRow(
-              label: 'Corner roundness',
-              value: s.roundness,
-              min: 0.4,
-              max: 1.6,
-              divisions: 12,
-              format: (v) => v < 0.7 ? 'Square' : (v > 1.2 ? 'Round' : 'Soft'),
-              onChanged: (v) => app.updateSettings((x) => x.roundness = double.parse(v.toStringAsFixed(1))),
-            ),
-            SliderRow(
-              label: 'Interface text size',
-              value: s.uiScale,
-              min: 0.85,
-              max: 1.3,
-              divisions: 9,
-              format: (v) => '${(v * 100).round()}%',
-              onChanged: (v) => app.updateSettings((x) => x.uiScale = double.parse(v.toStringAsFixed(2))),
-            ),
-            ToolRow(
-              label: 'Interface font',
-              value: uiFonts[s.uiFont]?.$1 ?? 'Nunito',
-              onTap: () async {
-                final v = await pickOption<String>(context, title: 'Interface font', selected: s.uiFont, items: [
-                  for (final e in uiFonts.entries) OptionItem(e.key, e.value.$1),
-                ]);
-                if (v != null) app.updateSettings((x) => x.uiFont = v);
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
-        const Kicker('Surfaces'),
+        const Kicker('Glass'),
         const SizedBox(height: 10),
         ToolGroup(
           children: [
@@ -851,15 +918,6 @@ class AppearanceScreen extends StatelessWidget {
               label: 'Frosted glass',
               detail: 'Blur behind the bars. Turn off for extra smoothness on older phones.',
               trailing: TinySwitch(value: s.glass, onChanged: (v) => app.updateSettings((x) => x.glass = v)),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: SegToggle<String>(
-                value: s.background,
-                expand: true,
-                options: const {'none': 'Plain', 'dots': 'Dots', 'grid': 'Grid'},
-                onChanged: (v) => app.updateSettings((x) => x.background = v),
-              ),
             ),
           ],
         ),
@@ -1046,35 +1104,45 @@ class ReaderSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.app;
     final s = app.settings;
-    final c = context.sc;
-    final font = readerFontById(s.readerFont);
     return PageScroll(
       id: 'settings-reader',
       children: [
-        ScreenHeader(title: 'Reader', onBack: app.back),
+        ScreenHeader(title: 'Reading', onBack: app.back),
         const SizedBox(height: 20),
-        SoftCard(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: 'Καλημέρα ', style: TextStyle(backgroundColor: c.info.withValues(alpha: 0.2))),
-                const TextSpan(text: 'σας! '),
-                TextSpan(text: 'שָׁלוֹם ', style: TextStyle(backgroundColor: c.warn.withValues(alpha: 0.3))),
-                const TextSpan(text: 'עוֹלָם. مَرْحَبًا بِكُمْ. El gato duerme.'),
-              ],
+        const Kicker('Goal'),
+        const SizedBox(height: 10),
+        ToolGroup(
+          children: [
+            ToolRow(
+              icon: PhosphorIconsRegular.target,
+              label: 'Daily goal',
+              trailing: StepperControl(
+                value: s.dailyGoalMinutes.toDouble(),
+                min: 5,
+                max: 180,
+                step: 5,
+                format: (v) => '${v.round()}m',
+                onChanged: (v) => app.updateSettings((x) => x.dailyGoalMinutes = v.round()),
+              ),
             ),
-            style: TextStyle(
-              fontFamily: font.family,
-              fontFamilyFallback: readerFallback,
-              fontSize: s.fontSize,
-              height: s.lineHeight,
-              wordSpacing: s.wordSpacing,
-              color: c.text,
+            ToolRow(
+              icon: PhosphorIconsRegular.flame,
+              label: 'Streak needs the goal',
+              detail: 'Off: a minute of reading keeps it alive',
+              trailing: TinySwitch(value: s.streakNeedsGoal, onChanged: (v) => app.updateSettings((x) => x.streakNeedsGoal = v)),
             ),
-          ),
+            ToolRow(
+              icon: PhosphorIconsRegular.checkCircle,
+              label: 'Finishing marks new words known',
+              detail: 'Words you never tapped are ones you understood',
+              trailing: TinySwitch(value: s.autoKnownOnFinish, onChanged: (v) => app.updateSettings((x) => x.autoKnownOnFinish = v)),
+            ),
+          ],
         ),
-        const SizedBox(height: 22),
-        const ReaderControls(),
+        const SizedBox(height: 26),
+        const Kicker('Reader'),
+        const SizedBox(height: 10),
+        ReaderSettingsTabs(language: app.activeLanguage ?? (s.learning.isNotEmpty ? s.learning.first : 'en'), pickLanguage: true),
       ],
     );
   }
@@ -1217,6 +1285,43 @@ class LayoutScreen extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 26),
+        const Kicker('Moving between screens'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in const {'blur': 'Blur', 'fade': 'Fade', 'slide': 'Slide', 'scale': 'Zoom', 'none': 'None'}.entries)
+              Pill(label: e.value, selected: s.transition == e.key, onTap: () => app.updateSettings((x) => x.transition = e.key)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ToolGroup(
+          children: [
+            if (s.transition == 'blur')
+              SliderRow(
+                label: 'Blur strength',
+                value: s.transitionBlur,
+                min: 2,
+                max: 24,
+                divisions: 22,
+                format: (v) => v.round().toString(),
+                onChanged: (v) => app.updateSettings((x) => x.transitionBlur = v),
+              ),
+            ToolRow(
+              icon: PhosphorIconsRegular.vibrate,
+              label: 'Haptics',
+              trailing: TinySwitch(value: s.haptics, onChanged: (v) => app.updateSettings((x) => x.haptics = v)),
+            ),
+            ToolRow(
+              icon: PhosphorIconsRegular.personSimpleWalk,
+              label: 'Reduce motion',
+              detail: 'Also follows your system setting',
+              trailing: TinySwitch(value: s.reduceMotion, onChanged: (v) => app.updateSettings((x) => x.reduceMotion = v)),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1350,79 +1455,6 @@ class _MiniBtn extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ------------------------------------------------------------------ motion
-
-class MotionScreen extends StatefulWidget {
-  const MotionScreen({super.key});
-
-  @override
-  State<MotionScreen> createState() => _MotionScreenState();
-}
-
-class _MotionScreenState extends State<MotionScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final app = context.app;
-    final s = app.settings;
-    final c = context.sc;
-    return PageScroll(
-      id: 'settings-motion',
-      children: [
-        ScreenHeader(title: 'Transitions', onBack: app.back),
-        const SizedBox(height: 22),
-        Text(
-          'How screens hand over when you switch tabs or open a page. '
-          'Switch tabs to see the result.',
-          style: AppTheme.f(13, weight: FontWeight.w500, color: c.textSecondary, height: 1.45),
-        ),
-        const SizedBox(height: 16),
-        OptionGroup<String>(
-          selected: s.transition,
-          onSelect: (v) => app.updateSettings((x) => x.transition = v),
-          items: const [
-            OptionItem('blur', 'Blur', icon: PhosphorIconsRegular.drop, detail: 'The old page drifts out of focus as the new one sharpens'),
-            OptionItem('fade', 'Fade', icon: PhosphorIconsRegular.circleHalf, detail: 'A plain cross-fade'),
-            OptionItem('slide', 'Slide', icon: PhosphorIconsRegular.arrowsLeftRight, detail: 'Pages slide sideways and up'),
-            OptionItem('scale', 'Zoom', icon: PhosphorIconsRegular.arrowsOut, detail: 'The new page settles in from slightly larger'),
-            OptionItem('none', 'None', icon: PhosphorIconsRegular.prohibit, detail: 'Instant'),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ToolGroup(
-          children: [
-            if (s.transition == 'blur')
-              SliderRow(
-                label: 'Blur strength',
-                value: s.transitionBlur,
-                min: 2,
-                max: 24,
-                divisions: 22,
-                format: (v) => v.round().toString(),
-                onChanged: (v) => app.updateSettings((x) => x.transitionBlur = v),
-              ),
-            if (s.transition != 'none')
-              SliderRow(
-                label: 'Duration',
-                value: s.transitionMs.toDouble(),
-                min: 180,
-                max: 800,
-                divisions: 31,
-                format: (v) => '${v.round()} ms',
-                onChanged: (v) => app.updateSettings((x) => x.transitionMs = v.round()),
-              ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        GhostButton(
-          label: 'Try it: open the Library',
-          icon: PhosphorIconsBold.play,
-          onTap: () => app.go(app.visibleTabs.first),
-        ),
-      ],
     );
   }
 }

@@ -40,8 +40,17 @@ flutter:
     - assets/fonts/OFL-varelaround.txt
     - assets/fonts/OFL-rubik.txt
     - assets/fonts/OFL-vazirmatn.txt
-    - assets/fonts/OFL-notosansarabic.txt
     - assets/fonts/OFL-baloobhaijaan2.txt
+    - assets/fonts/OFL-ebgaramond.txt
+    - assets/fonts/OFL-poppins.txt
+    - assets/fonts/OFL-inter.txt
+    - assets/fonts/OFL-davidlibre.txt
+    - assets/fonts/OFL-markazitext.txt
+    - assets/fonts/OFL-reemkufi.txt
+    - assets/fonts/OFL-gfsdidot.txt
+    - assets/fonts/OFL-ptserif.txt
+    - assets/fonts/OFL-notoserifgeorgian.txt
+    - assets/fonts/OFL-notosansgeorgian.txt
 
   fonts:
     - family: Nunito
@@ -140,15 +149,67 @@ flutter:
           weight: 400
         - asset: assets/fonts/Vazirmatn-700.ttf
           weight: 700
-    - family: NotoSansArabic
-      fonts:
-        - asset: assets/fonts/NotoSansArabic-400.ttf
-          weight: 400
-        - asset: assets/fonts/NotoSansArabic-700.ttf
-          weight: 700
     - family: BalooBhaijaan
       fonts:
         - asset: assets/fonts/BalooBhaijaan-400.ttf
           weight: 400
         - asset: assets/fonts/BalooBhaijaan-700.ttf
+          weight: 700
+    - family: EBGaramond
+      fonts:
+        - asset: assets/fonts/EBGaramond-400.ttf
+          weight: 400
+        - asset: assets/fonts/EBGaramond-700.ttf
+          weight: 700
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-400.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-700.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-400.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-700.ttf
+          weight: 700
+    - family: DavidLibre
+      fonts:
+        - asset: assets/fonts/DavidLibre-400.ttf
+          weight: 400
+        - asset: assets/fonts/DavidLibre-700.ttf
+          weight: 700
+    - family: MarkaziText
+      fonts:
+        - asset: assets/fonts/MarkaziText-400.ttf
+          weight: 400
+        - asset: assets/fonts/MarkaziText-700.ttf
+          weight: 700
+    - family: ReemKufi
+      fonts:
+        - asset: assets/fonts/ReemKufi-400.ttf
+          weight: 400
+        - asset: assets/fonts/ReemKufi-700.ttf
+          weight: 700
+    - family: GFSDidot
+      fonts:
+        - asset: assets/fonts/GFSDidot-400.ttf
+          weight: 400
+    - family: PTSerif
+      fonts:
+        - asset: assets/fonts/PTSerif-400.ttf
+          weight: 400
+        - asset: assets/fonts/PTSerif-700.ttf
+          weight: 700
+    - family: NotoSerifGeorgian
+      fonts:
+        - asset: assets/fonts/NotoSerifGeorgian-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSerifGeorgian-700.ttf
+          weight: 700
+    - family: NotoSansGeorgian
+      fonts:
+        - asset: assets/fonts/NotoSansGeorgian-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansGeorgian-700.ttf
           weight: 700

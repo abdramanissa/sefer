@@ -4,11 +4,24 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/ai.dart';
 import '../data/app_state.dart';
+import '../data/translate.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
+
+/// A [Translator] for the current settings.
+Translator translatorFor(AppState app) {
+  final s = app.settings;
+  return Translator(
+    internet: s.internet,
+    service: s.translator,
+    key: s.translator == Translators.deepl ? s.deeplKey : s.googleKey,
+    ai: aiClientFor(app),
+    aiModel: s.aiModel,
+  );
+}
 
 /// An [AiClient] for the current settings.
 AiClient aiClientFor(AppState app) => AiClient(
@@ -151,9 +164,105 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
               : 'OpenRouter reaches models from many companies. Prices are per million tokens in and out; a story is a few thousand.',
           style: body,
         ),
+        const SizedBox(height: 30),
+        const Kicker('Translation'),
+        const SizedBox(height: 10),
+        SegToggle<String>(
+          value: s.translator,
+          expand: true,
+          options: const {'off': 'Off', 'deepl': 'DeepL', 'google': 'Google', 'ai': 'AI model'},
+          onChanged: (v) => app.updateSettings((x) => x.translator = v),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          switch (s.translator) {
+            'off' => 'Words and sentences are translated only from what the text itself carries.',
+            'ai' => 'Uses the model above. It sees the sentence, so it picks the right meaning of a word.',
+            _ => 'A Translate button appears on words and sentences without a translation.',
+          },
+          style: body,
+        ),
+        if (s.translator == 'deepl' || s.translator == 'google') ...[
+          const SizedBox(height: 14),
+          _KeyField(
+            key: ValueKey('key-${s.translator}'),
+            label: s.translator == 'deepl' ? 'DeepL API key' : 'Google Cloud API key',
+            hint: s.translator == 'deepl' ? '…:fx for a free key' : 'AIza…',
+            initial: s.translator == 'deepl' ? s.deeplKey : s.googleKey,
+            onChanged: (v) => app.updateSettings((x) {
+              if (x.translator == 'deepl') {
+                x.deeplKey = v;
+              } else {
+                x.googleKey = v;
+              }
+            }),
+          ),
+        ],
+        if (s.translator != 'off') ...[
+          const SizedBox(height: 14),
+          ToolGroup(
+            children: [
+              ToolRow(
+                icon: PhosphorIconsRegular.lightning,
+                label: 'Translate on tap',
+                detail: 'When a word has no meaning yet, fetch one right away',
+                trailing: TinySwitch(value: s.autoTranslate, onChanged: (v) => app.updateSettings((x) => x.autoTranslate = v)),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
+}
+
+/// A secret field that saves as you type.
+class _KeyField extends StatefulWidget {
+  const _KeyField({super.key, required this.label, required this.hint, required this.initial, required this.onChanged});
+  final String label;
+  final String hint;
+  final String initial;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_KeyField> createState() => _KeyFieldState();
+}
+
+class _KeyFieldState extends State<_KeyField> {
+  late final _ctl = TextEditingController(text: widget.initial);
+  bool _show = false;
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppField(
+    controller: _ctl,
+    label: widget.label,
+    hint: widget.hint,
+    obscure: !_show,
+    style: AppTheme.f(14, weight: FontWeight.w600, color: context.sc.text),
+    onChanged: (v) => widget.onChanged(v.trim()),
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _FieldIcon(icon: _show ? PhosphorIconsRegular.eyeSlash : PhosphorIconsRegular.eye, label: _show ? 'Hide key' : 'Show key', onTap: () => setState(() => _show = !_show)),
+        _FieldIcon(
+          icon: PhosphorIconsRegular.clipboardText,
+          label: 'Paste key',
+          onTap: () async {
+            final t = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+            if (t == null || t.isEmpty) return;
+            _ctl.text = t;
+            widget.onChanged(t);
+          },
+        ),
+      ],
+    ),
+  );
 }
 
 class _FieldIcon extends StatelessWidget {

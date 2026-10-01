@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sefer/theme/app_theme.dart';
 import 'package:sefer/text/normalize.dart';
 import 'package:sefer/text/script.dart';
 import 'package:sefer/text/tokenizer.dart';
@@ -163,6 +164,28 @@ void main() {
       expect(transliterate('hola'), '');
       expect(canTransliterate('hola'), isFalse);
       expect(canTransliterate('שלום'), isTrue);
+    });
+  });
+
+  group('reader fonts', () {
+    test('only fonts for the language\'s script are offered', () {
+      final georgian = fontsFor(fontScriptOf('ka')).map((f) => f.id);
+      expect(georgian, containsAll(['georgianserif', 'georgiansans']));
+      expect(georgian, isNot(contains('poppins')));
+      final hebrew = fontsFor(fontScriptOf('he')).map((f) => f.id);
+      expect(hebrew, contains('frankruhl'));
+      expect(hebrew, isNot(contains('literata')));
+      expect(fontsFor(fontScriptOf('el')).map((f) => f.id), containsAll(['literata', 'gfsdidot']));
+    });
+
+    test('a pick is that language\'s font; others keep their default', () {
+      final byLang = {'ca': 'poppins'};
+      expect(readerFontFor(byLang, 'literata', 'ca').id, 'poppins');
+      expect(readerFontFor(byLang, 'literata', 'el').id, 'literata');
+      expect(readerFontFor(byLang, 'literata', 'he').id, 'frankruhl');
+      expect(readerFontFor(byLang, 'literata', 'ka').id, 'georgianserif');
+      // A choice that doesn't suit the script is ignored.
+      expect(readerFontFor({'he': 'poppins'}, 'literata', 'he').id, 'frankruhl');
     });
   });
 }

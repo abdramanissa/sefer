@@ -6,7 +6,23 @@ abstract final class AppIcon {
   static const _channel = MethodChannel('sefer/app_icon');
 
   /// Icon id → (name, letter).
-  static const all = {'aleph': ('Aleph', 'א'), 'bet': ('Bet', 'ב')};
+  static const all = {
+    'aleph': ('Aleph', 'א'),
+    'bet': ('Bet', 'ב'),
+    'lamed': ('Lamed', 'ל'),
+    'tav': ('Tav', 'ת'),
+    'omega': ('Omega', 'Ω'),
+    'pe': ('Pe', 'پ'),
+    'ko': ('Ko kai', 'ก'),
+    'de': ('De', 'Д'),
+    'eszett': ('Eszett', 'ß'),
+    'eacute': ('É', 'É'),
+    'q': ('Q', 'Q'),
+    'ani': ('Ani', 'ა'),
+    'hiragana': ('A', 'あ'),
+    'hangul': ('Han', '한'),
+    'devanagari': ('A', 'अ'),
+  };
 
   /// Returns false where icons can't be switched (tests, other platforms).
   static Future<bool> set(String id) async {

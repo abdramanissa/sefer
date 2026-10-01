@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../data/ai.dart';
 import '../data/app_state.dart';
+import '../data/translate.dart';
 import '../data/exporter.dart';
 import '../data/io.dart';
 import '../data/models.dart';
@@ -13,6 +15,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notch_toast.dart';
 import '../widgets/ui_kit.dart';
+import 'ai_settings.dart';
 
 /// Colour for a word status, used in the reader, the sheet and the word list.
 Color statusColor(int status, SeferColors c) => switch (status) {
@@ -63,6 +66,27 @@ class WordSheet extends StatefulWidget {
 }
 
 class _WordSheetState extends State<WordSheet> {
+  bool _translating = false;
+
+  Future<void> _translate() async {
+    setState(() => _translating = true);
+    try {
+      final t = await translatorFor(context.appRead).translate(
+        widget.word,
+        from: widget.story.language,
+        to: widget.story.translationLanguage,
+        context: widget.sentence.text,
+      );
+      if (!mounted || t.isEmpty) return;
+      _meaning.text = t;
+      widget.draft.meaning = t;
+    } on AiException catch (e) {
+      if (mounted) showNotchToast(context, title: 'No translation', subtitle: e.message, icon: PhosphorIconsFill.warning, accent: context.sc.danger);
+    } finally {
+      if (mounted) setState(() => _translating = false);
+    }
+  }
+
   late final TextEditingController _meaning;
   late final TextEditingController _note;
   late final TextEditingController _reading;
@@ -196,6 +220,20 @@ class _WordSheetState extends State<WordSheet> {
           maxLines: 3,
           minLines: 1,
           onChanged: (v) => widget.draft.meaning = v.trim(),
+          trailing: context.app.settings.translator == Translators.off
+              ? null
+              : _translating
+              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.accent))
+              : Semantics(
+                  button: true,
+                  label: 'Translate',
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _translate,
+                    child: SizedBox(width: 32, height: 22, child: Icon(PhosphorIconsBold.translate, size: 17, color: c.accent)),
+                  ),
+                ),
         ),
         const SizedBox(height: 12),
         AppField(

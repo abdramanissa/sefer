@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/add_screen.dart';
+import '../screens/generate_screen.dart';
 import '../screens/ai_settings.dart';
 import '../screens/library_screen.dart';
 import '../screens/quiz_screen.dart';
@@ -18,6 +19,7 @@ Widget buildScreen(String route) {
   final arg = i < 0 ? '' : route.substring(i + 1);
   return switch (name) {
     'add' => const AddScreen(),
+    'generate' => const GenerateScreen(),
     'words' => const WordsScreen(),
     'profile' => const ProfileScreen(),
     'stats' => const StatsScreen(),
@@ -25,7 +27,8 @@ Widget buildScreen(String route) {
       'appearance' => const AppearanceScreen(),
       'reader' => const ReaderSettingsScreen(),
       'layout' => const LayoutScreen(),
-      'motion' => const MotionScreen(),
+      'motion' => const LayoutScreen(),
+      'data' => const DataScreen(),
       'about' => const AboutScreen(),
       'ai' => const AiSettingsScreen(),
       _ => const ProfileScreen(),

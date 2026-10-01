@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+
 import '../data/app_state.dart';
 import '../data/languages.dart';
 import '../data/models.dart';
@@ -13,18 +14,36 @@ import '../theme/feel.dart';
 import '../widgets/common.dart';
 import '../widgets/motion.dart';
 import '../widgets/ui_kit.dart';
+import 'reader_screen.dart';
 
 /// A story's quiz: one question at a time, pick an answer, see whether it
 /// was right, and get a score at the end.
-class QuizScreen extends StatefulWidget {
+class QuizScreen extends StatelessWidget {
   const QuizScreen({super.key, required this.id});
   final String id;
 
   @override
-  State<QuizScreen> createState() => _QuizScreenState();
+  Widget build(BuildContext context) {
+    // The quiz sits on the same paper as the reader.
+    final paper = ReaderPaper.byId(context.app.settings.readerPaper).palette(context.sc);
+    final view = _QuizView(id: id);
+    if (paper == null) return view;
+    return Theme(
+      data: AppTheme.build(paper),
+      child: ColoredBox(color: paper.bg, child: view),
+    );
+  }
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizView extends StatefulWidget {
+  const _QuizView({required this.id});
+  final String id;
+
+  @override
+  State<_QuizView> createState() => _QuizScreenState();
+}
+
+class _QuizScreenState extends State<_QuizView> {
   final _rand = Random();
   late List<List<int>> _order;
   final Map<int, int> _answers = {};
@@ -196,9 +215,7 @@ class _QuizScreenState extends State<QuizScreen> {
               ],
               if (answered) ...[
                 const SizedBox(height: 8),
-                Rise(
-                  child: _Verdict(right: picked == q.answer, explanation: q.explanation, answer: q.options[q.answer]),
-                ),
+                _Verdict(right: picked == q.answer, explanation: q.explanation, answer: q.options[q.answer]),
               ],
             ],
           ),
@@ -245,72 +262,61 @@ class _QuizScreenState extends State<QuizScreen> {
           child: ListView(
             padding: const EdgeInsets.only(top: 24, bottom: 24),
             children: [
-              Rise(
-                child: Center(
-                  child: SizedBox(
-                    width: 180,
-                    height: 180,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: score / 100),
-                          duration: Motion.reduced(context) ? Duration.zero : const Duration(milliseconds: 1100),
-                          curve: Curves.easeOutCubic,
-                          builder: (_, v, _) => CustomPaint(
-                            size: const Size.square(180),
-                            painter: _Ring(value: v, color: color, track: c.bgRaised2),
+              Center(
+                child: SizedBox(
+                  width: 180,
+                  height: 180,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: score / 100),
+                        duration: Motion.reduced(context) ? Duration.zero : const Duration(milliseconds: 1100),
+                        curve: Curves.easeOutCubic,
+                        builder: (_, v, _) => CustomPaint(
+                          size: const Size.square(180),
+                          painter: _Ring(value: v, color: color, track: c.bgRaised2),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          RollIn(
+                            value: score,
+                            style: AppTheme.f(46, weight: FontWeight.w800, color: c.text),
+                            format: (v) => '${v.round()}%',
                           ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            RollIn(
-                              value: score,
-                              style: AppTheme.f(46, weight: FontWeight.w800, color: c.text),
-                              format: (v) => '${v.round()}%',
-                            ),
-                            Text('$correct of $total right', style: AppTheme.f(13, weight: FontWeight.w600, color: c.textSecondary)),
-                          ],
-                        ),
-                      ],
-                    ),
+                          Text('$correct of $total right', style: AppTheme.f(13, weight: FontWeight.w600, color: c.textSecondary)),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(height: 22),
-              Rise(
-                index: 1,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (var i = 0; i < 3; i++)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                          i < stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
-                          size: 30,
-                          color: i < stars ? c.brass : c.textTertiary,
-                        ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < 3; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        i < stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
+                        size: 30,
+                        color: i < stars ? c.brass : c.textTertiary,
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
               const SizedBox(height: 14),
-              Rise(
-                index: 2,
-                child: Text(label, textAlign: TextAlign.center, style: AppTheme.f(26, weight: FontWeight.w800, color: c.text)),
-              ),
+              Text(label, textAlign: TextAlign.center, style: AppTheme.f(26, weight: FontWeight.w800, color: c.text)),
               const SizedBox(height: 6),
-              Rise(
-                index: 3,
-                child: Text(
-                  _newBest
-                      ? 'A new best for this story.'
-                      : (s.quizBest != null && s.quizAttempts > 1 ? 'Your best: ${s.quizBest}%' : s.title),
-                  textAlign: TextAlign.center,
-                  style: AppTheme.f(14, weight: FontWeight.w600, color: _newBest ? c.sage : c.textSecondary),
-                ),
+              Text(
+                _newBest
+                    ? 'A new best for this story.'
+                    : (s.quizBest != null && s.quizAttempts > 1 ? 'Your best: ${s.quizBest}%' : s.title),
+                textAlign: TextAlign.center,
+                style: AppTheme.f(14, weight: FontWeight.w600, color: _newBest ? c.sage : c.textSecondary),
               ),
             ],
           ),

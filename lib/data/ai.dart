@@ -56,12 +56,24 @@ class AiClient {
     if (key.trim().isEmpty) throw AiException('Add your ${AiProviders.names[provider]} API key first.');
   }
 
-  Future<(int, String)> _send(String method, Uri url, Map<String, String> headers, [String? body]) async {
+  Future<(int, String)> _send(String method, Uri url, Map<String, String> headers, [String? body]) =>
+      send(method, url, headers, body, transport: transport);
+
+  /// One request through the test stand-in or the real network, with
+  /// failures turned into plain words.
+  static Future<(int, String)> send(
+    String method,
+    Uri url,
+    Map<String, String> headers,
+    String? body, {
+    Transport? transport,
+    Duration timeout = _timeout,
+  }) async {
     final t = transport ?? debugTransport ?? _httpTransport;
     try {
-      return await t(method, url, headers, body).timeout(_timeout);
+      return await t(method, url, headers, body).timeout(timeout);
     } on TimeoutException {
-      throw AiException('The model took too long to answer. Try a shorter text or fewer parts.');
+      throw AiException('${url.host} took too long to answer.');
     } on SocketException {
       throw AiException('Could not reach ${url.host}. Check your connection.');
     } on HandshakeException {
@@ -88,7 +100,7 @@ class AiClient {
     }
   }
 
-  static String _errorOf(int status, String body) {
+  static String errorOf(int status, String body) {
     try {
       final j = jsonDecode(body);
       final e = j is Map ? j['error'] : null;
@@ -105,7 +117,7 @@ class AiClient {
   }
 
   /// Sends [system] and [user] to [model] and returns the reply's text.
-  Future<String> complete({required String model, required String system, required String user}) async {
+  Future<String> complete({required String model, required String system, required String user, bool json = true}) async {
     _check();
     if (model.trim().isEmpty) throw AiException('Choose a model first.');
     if (provider == AiProviders.gemini) {
@@ -128,10 +140,10 @@ class AiClient {
               ],
             },
           ],
-          'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.9},
+          'generationConfig': {if (json) 'responseMimeType': 'application/json', 'temperature': json ? 0.9 : 0.2},
         }),
       );
-      if (status != 200) throw AiException(_errorOf(status, body));
+      if (status != 200) throw AiException(errorOf(status, body));
       final j = jsonDecode(body) as Map;
       final cands = j['candidates'];
       if (cands is! List || cands.isEmpty) {
@@ -160,13 +172,13 @@ class AiClient {
           {'role': 'system', 'content': system},
           {'role': 'user', 'content': user},
         ],
-        'response_format': {'type': 'json_object'},
-        'temperature': 0.9,
+        if (json) 'response_format': {'type': 'json_object'},
+        'temperature': json ? 0.9 : 0.2,
       }),
     );
-    if (status != 200) throw AiException(_errorOf(status, body));
+    if (status != 200) throw AiException(errorOf(status, body));
     final j = jsonDecode(body) as Map;
-    if (j['error'] != null) throw AiException(_errorOf(status, body));
+    if (j['error'] != null) throw AiException(errorOf(status, body));
     final choices = j['choices'];
     if (choices is! List || choices.isEmpty) throw AiException('The model sent no answer.');
     final choice = choices.first as Map;
@@ -187,7 +199,7 @@ class AiClient {
         Uri.https('generativelanguage.googleapis.com', '/v1beta/models', {'pageSize': '1000'}),
         {'x-goog-api-key': key.trim()},
       );
-      if (status != 200) throw AiException(_errorOf(status, body));
+      if (status != 200) throw AiException(errorOf(status, body));
       final list = (jsonDecode(body) as Map)['models'] as List? ?? const [];
       return [
         for (final m in list.whereType<Map>())
@@ -199,7 +211,7 @@ class AiClient {
     final (status, body) = await _send('GET', Uri.https('openrouter.ai', '/api/v1/models'), {
       'Authorization': 'Bearer ${key.trim()}',
     });
-    if (status != 200) throw AiException(_errorOf(status, body));
+    if (status != 200) throw AiException(errorOf(status, body));
     final list = (jsonDecode(body) as Map)['data'] as List? ?? const [];
     String price(Map m) {
       final p = m['pricing'];

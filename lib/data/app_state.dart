@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/presets.dart';
 import 'app_icon.dart';
 import 'exporter.dart';
+import 'generation.dart';
 import 'importer.dart';
 import 'models.dart';
 import 'stats.dart';
@@ -47,6 +48,9 @@ class AppState extends ChangeNotifier {
 
   /// Bumped whenever vocabulary changes, so the reader can rebuild cheaply.
   int vocabVersion = 0;
+
+  /// The story generator's work in progress, kept across screens.
+  final generation = Generation();
 
   // ------------------------------------------------------------ persistence
 
@@ -262,7 +266,7 @@ class AppState extends ChangeNotifier {
     return i < 0 ? route : route.substring(0, i);
   }
 
-  bool get showNav => routeName != 'reader' && routeName != 'quiz';
+  bool get showNav => !const {'reader', 'quiz', 'generate'}.contains(routeName);
 
   // ------------------------------------------------------------ library
 
@@ -797,7 +801,9 @@ class AppState extends ChangeNotifier {
         ..onboarded = true
         ..internet = old.internet
         ..geminiKey = old.geminiKey
-        ..openRouterKey = old.openRouterKey;
+        ..openRouterKey = old.openRouterKey
+        ..deeplKey = old.deeplKey
+        ..googleKey = old.googleKey;
       // The launcher icon follows the restored choice.
       unawaited(AppIcon.set(settings.appIcon));
     }

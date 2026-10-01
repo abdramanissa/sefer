@@ -50,6 +50,22 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
-        private val ICONS = mapOf("aleph" to "IconAleph", "bet" to "IconBet")
+        private val ICONS = mapOf(
+            "aleph" to "IconAleph",
+            "bet" to "IconBet",
+            "lamed" to "IconLamed",
+            "tav" to "IconTav",
+            "omega" to "IconOmega",
+            "pe" to "IconPe",
+            "ko" to "IconKo",
+            "de" to "IconDe",
+            "eszett" to "IconEszett",
+            "eacute" to "IconEacute",
+            "q" to "IconQ",
+            "ani" to "IconAni",
+            "hiragana" to "IconHiragana",
+            "hangul" to "IconHangul",
+            "devanagari" to "IconDevanagari",
+        )
     }
 }
