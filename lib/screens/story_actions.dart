@@ -168,8 +168,9 @@ Future<void> showShelvesSheet(BuildContext context) => showAppSheet<void>(
                 ToolRow(
                   icon: PhosphorIconsRegular.bookBookmark,
                   label: sh.name,
-                  value: '${app.stories.where((s) => s.shelves.contains(sh.id)).length}',
-                  onTap: () => _editShelf(ctx, sh),
+                  value: '${app.stories.where(sh.holds).length}',
+                  detail: sh.tags.isEmpty ? null : sh.tags.map((t) => '#$t').join(' '),
+                  onTap: () => editShelf(ctx, sh),
                 ),
             ],
           ),
@@ -177,10 +178,7 @@ Future<void> showShelvesSheet(BuildContext context) => showAppSheet<void>(
         GhostButton(
           label: 'New shelf',
           icon: PhosphorIconsBold.plus,
-          onTap: () async {
-            final name = await askText(ctx, title: 'New shelf', hint: 'Name', action: 'Create');
-            if (name != null && name.isNotEmpty) app.addShelf(name);
-          },
+          onTap: () => editShelf(ctx),
         ),
         if (app.allTags.isNotEmpty) ...[
           const SizedBox(height: 24),
@@ -214,21 +212,76 @@ Future<void> showShelvesSheet(BuildContext context) => showAppSheet<void>(
   },
 );
 
-Future<void> _editShelf(BuildContext context, Shelf sh) async {
+/// Creates a shelf, or edits [shelf]: its name and the tags that fill it.
+/// Stories with any of the tags show on the shelf without being added by
+/// hand.
+Future<void> editShelf(BuildContext context, [Shelf? shelf]) {
   final app = context.appRead;
-  final v = await pickOption<String>(
+  final name = TextEditingController(text: shelf?.name ?? '');
+  final picked = <String>{...?shelf?.tags};
+  return showAppSheet<void>(
     context,
-    title: sh.name,
-    items: const [
-      OptionItem('rename', 'Rename', icon: PhosphorIconsRegular.pencilSimple),
-      OptionItem('delete', 'Delete shelf', icon: PhosphorIconsRegular.trash, danger: true, detail: 'Stories stay in your library'),
-    ],
+    (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) {
+        final c = ctx.sc;
+        final tags = app.allTags;
+        final count = app.stories.where((s) => (shelf != null && s.shelves.contains(shelf.id)) || s.tags.any(picked.contains)).length;
+        return SheetBody(
+          title: shelf == null ? 'New shelf' : 'Edit shelf',
+          subtitle: '$count ${count == 1 ? 'story' : 'stories'}',
+          children: [
+            AppField(controller: name, label: 'Name', hint: 'Grammar, Bedtime, Exam…', onChanged: (_) => setSheet(() {})),
+            const SizedBox(height: 18),
+            const Kicker('Stories tagged'),
+            const SizedBox(height: 10),
+            if (tags.isEmpty)
+              Text(
+                'No tags yet. Add tags to a story from its ⋯ menu, then pick them here.',
+                style: AppTheme.f(12.5, weight: FontWeight.w500, color: c.textSecondary),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final t in tags)
+                    Pill(
+                      label: '#$t',
+                      selected: picked.contains(t),
+                      onTap: () => setSheet(() => picked.contains(t) ? picked.remove(t) : picked.add(t)),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 22),
+            PrimaryButton(
+              label: shelf == null ? 'Create shelf' : 'Save',
+              onTap: name.text.trim().isEmpty
+                  ? null
+                  : () {
+                      if (shelf == null) {
+                        app.addShelf(name.text, tags: picked.toList());
+                      } else {
+                        app.renameShelf(shelf.id, name.text);
+                        app.setShelfTags(shelf.id, picked.toList());
+                      }
+                      Navigator.pop(ctx);
+                    },
+            ),
+            if (shelf != null) ...[
+              const SizedBox(height: 10),
+              GhostButton(
+                label: 'Delete shelf',
+                icon: PhosphorIconsBold.trash,
+                color: c.danger,
+                onTap: () {
+                  app.deleteShelf(shelf.id);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ],
+        );
+      },
+    ),
   );
-  if (!context.mounted) return;
-  if (v == 'rename') {
-    final name = await askText(context, title: 'Rename shelf', initial: sh.name, action: 'Rename');
-    if (name != null && name.isNotEmpty) app.renameShelf(sh.id, name);
-  } else if (v == 'delete') {
-    app.deleteShelf(sh.id);
-  }
 }

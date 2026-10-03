@@ -422,22 +422,31 @@ class Story {
 }
 
 class Shelf {
-  Shelf({required this.id, required this.name, DateTime? createdAt})
-    : createdAt = createdAt ?? DateTime.now();
+  Shelf({required this.id, required this.name, List<String>? tags, DateTime? createdAt})
+    : tags = tags ?? [],
+      createdAt = createdAt ?? DateTime.now();
 
   final String id;
   String name;
+
+  /// Stories carrying any of these tags sit on the shelf on their own.
+  List<String> tags;
   final DateTime createdAt;
+
+  /// On this shelf: put here by hand, or tagged with one of its tags.
+  bool holds(Story s) => s.shelves.contains(id) || s.tags.any(tags.contains);
 
   factory Shelf.fromJson(Map<String, dynamic> j) => Shelf(
     id: _str(j['id']),
     name: _str(j['name'], 'Shelf'),
+    tags: _strList(j['tags']),
     createdAt: _date(j['created_at']),
   );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    'tags': tags,
     'created_at': createdAt.toIso8601String(),
   };
 }
@@ -709,7 +718,7 @@ class Settings {
   int gridColumns = 2;
 
   // Transitions.
-  String transition = 'blur'; // blur | fade | slide | scale | none
+  String transition = 'zoom'; // zoom | blur | fade | slide | scale | none
   double transitionBlur = 10;
   int transitionMs = 380;
 
@@ -732,13 +741,13 @@ class Settings {
 
   // Added in 0.2: feel, profile, more reader and library options.
   String feel = 'classic'; // classic | minimal | compact | airy
-  bool glass = true; // frosted nav and bars
+  bool glass = false; // frosted nav and bars
   String? accentHex; // overrides the theme's accent
   double roundness = 1.0; // 0.5 square .. 1.5 very round
   String uiFont = 'nunito'; // nunito | atkinson | lexend | rubik
   String startTab = 'last'; // last or a tab id
   String lastTab = 'library';
-  String navStyle = 'floating'; // floating | docked
+  String navStyle = 'pill'; // see navStyles
   String languageScope = 'all'; // all | active: only the active language shows
   bool showContinueCard = false;
   String libraryGroup = 'none'; // none | language | shelf
@@ -789,6 +798,13 @@ class Settings {
 
   String appIcon = 'aleph';
   String readerLayout = 'scroll'; // scroll | pages
+  String readerTitle = 'large'; // large | small | bar: where the story title sits
+
+  /// Whether the title block sits above the text, rather than only in the bar.
+  bool get readerHeaderShown => showReaderHeader && readerTitle != 'bar';
+
+  /// Bumped when a redesign changes defaults that older files still hold.
+  static const lookVersion = 1;
 
   String get aiKey => aiProvider == 'openrouter' ? openRouterKey : geminiKey;
   String get aiModel => aiProvider == 'openrouter' ? openRouterModel : geminiModel;
@@ -893,6 +909,14 @@ class Settings {
     s.googleKey = _str(j['google_key']);
     s.autoTranslate = _bool(j['auto_translate'], s.autoTranslate);
     s.readerLayout = _str(j['reader_layout'], s.readerLayout) == 'pages' ? 'pages' : 'scroll';
+    s.readerTitle = _str(j['reader_title'], s.readerTitle);
+    s.background = _str(j['background'], s.background);
+    if (_int(j['look'], 0) < lookVersion) {
+      // The matte redesign: plain surfaces, the pill dock and zoom transitions.
+      s.transition = 'zoom';
+      s.glass = false;
+      s.navStyle = 'pill';
+    }
     return s;
   }
 
@@ -938,6 +962,8 @@ class Settings {
     'haptics': haptics,
     'reduce_motion': reduceMotion,
     'onboarded': onboarded,
+    'look': lookVersion,
+    'reader_title': readerTitle,
     'feel': feel,
     'glass': glass,
     'accent_hex': accentHex,

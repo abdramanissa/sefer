@@ -37,7 +37,7 @@ const _overlayLight = SystemUiOverlayStyle(
 const _navHeight = 70.0;
 
 /// The dock styles, in the order the settings show them.
-const navStyles = ['floating', 'island', 'bubble', 'docked', 'line'];
+const navStyles = ['pill', 'floating', 'island', 'bubble', 'docked', 'line'];
 
 /// Height the nav takes, so scrolling pages can pad their bottom.
 double navClearance(BuildContext context) =>
@@ -50,7 +50,6 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.app;
     final c = context.sc;
-    final feel = context.feel;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 60;
     final showNav = app.showNav && !keyboard;
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -66,7 +65,7 @@ class AppShell extends StatelessWidget {
           resizeToAvoidBottomInset: false,
           body: Stack(
             children: [
-              Positioned.fill(child: AppBackground(pattern: feel.decor ? app.settings.background : 'none')),
+              Positioned.fill(child: AppBackground(pattern: app.settings.background)),
               Positioned.fill(child: _ScreenSwitcher(route: app.route)),
               const Positioned(left: 0, top: 0, child: _GenerationWatch()),
               if (app.showNav)
@@ -148,7 +147,7 @@ class _ScreenSwitcher extends StatelessWidget {
     final app = context.app;
     final s = app.settings;
     final reduced = Motion.reduced(context) || s.transition == 'none';
-    final duration = Duration(milliseconds: reduced ? 0 : s.transitionMs);
+    final duration = Duration(milliseconds: reduced ? 0 : (s.transition == 'zoom' ? 300 : s.transitionMs));
     return AnimatedSwitcher(
       duration: duration,
       layoutBuilder: (current, previous) => Stack(
@@ -215,6 +214,7 @@ class RouteTransition extends StatelessWidget {
         final q = const Interval(0, 0.7).transform(1 - v);
         p = 1 - Curves.easeInCubic.transform(q);
       }
+      if (style == 'zoom') return _zoom(context, v, child!);
       final away = 1 - p;
       final rtl = Directionality.of(context) == TextDirection.rtl;
       final dir = (rtl ? -side : side).toDouble();
@@ -252,6 +252,41 @@ class RouteTransition extends StatelessWidget {
       );
     },
   );
+
+  /// Android's own feel: drilling in zooms the new page up from slightly
+  /// smaller while the old one grows away; going back runs it in reverse.
+  /// Switching tabs fades through with a small settle in scale.
+  Widget _zoom(BuildContext context, double v, Widget child) {
+    final t = incoming ? v : 1 - v; // 0 → 1 as this page arrives or leaves
+    double opacity;
+    double scale;
+    if (depth == 0) {
+      if (incoming) {
+        opacity = Curves.easeOut.transform(const Interval(0.3, 1).transform(t));
+        scale = 0.96 + 0.04 * Curves.easeOutCubic.transform(t);
+      } else {
+        opacity = 1 - Curves.easeOut.transform(const Interval(0, 0.3).transform(t));
+        scale = 1;
+      }
+    } else {
+      final forward = depth > 0;
+      final eased = Curves.fastOutSlowIn.transform(t);
+      if (incoming) {
+        opacity = Curves.easeOut.transform(const Interval(0.15, 0.55).transform(t));
+        scale = forward ? 0.85 + 0.15 * eased : 1.05 - 0.05 * eased;
+      } else {
+        opacity = 1 - Curves.easeIn.transform(const Interval(0, 0.4).transform(t));
+        scale = forward ? 1 + 0.05 * eased : 1 - 0.15 * eased;
+      }
+    }
+    return IgnorePointer(
+      ignoring: !incoming,
+      child: Transform.scale(
+        scale: scale,
+        child: Opacity(opacity: opacity.clamp(0.0, 1.0), child: child),
+      ),
+    );
+  }
 }
 
 // ------------------------------------------------------------------ edge fade
@@ -356,7 +391,16 @@ class _NavBarState extends State<_NavBar> with SingleTickerProviderStateMixin {
     final s = app.settings;
     final tabs = app.visibleTabs;
     final withFab = s.showCenterButton;
-    final style = navStyles.contains(s.navStyle) ? s.navStyle : 'floating';
+    final style = navStyles.contains(s.navStyle) ? s.navStyle : 'pill';
+    if (style == 'pill') {
+      return _PillDock(
+        tabs: tabs,
+        selected: app.lastTab,
+        labels: s.showLabels,
+        centre: withFab,
+        onSelect: _openTab,
+      );
+    }
     final docked = style == 'docked' || style == 'line';
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final screen = MediaQuery.sizeOf(context).width;
@@ -609,7 +653,8 @@ class _NavItem extends StatelessWidget {
 /// The centre button: one tap continues the story you were reading; a long
 /// press lists recent ones. With an empty library it opens the Add tab.
 class _ContinueButton extends StatelessWidget {
-  const _ContinueButton();
+  const _ContinueButton({this.size = 54});
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -635,20 +680,12 @@ class _ContinueButton extends StatelessWidget {
           _recentSheet(context);
         },
         child: Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [c.accent, c.brass],
-            ),
-            boxShadow: [BoxShadow(color: c.accent.withValues(alpha: 0.45), blurRadius: 18, offset: const Offset(0, 6))],
-          ),
+          width: size,
+          height: size,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: c.accent),
           child: Icon(
             story == null ? PhosphorIconsBold.plus : PhosphorIconsFill.bookOpenText,
-            size: 22,
+            size: size * 0.4,
             color: c.bg,
           ),
         ),
@@ -716,6 +753,153 @@ class _ContinueButton extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The default dock: a flat, slightly translucent capsule hugging its icons.
+/// The current tab gets a tinted pill and its label slides out beside the
+/// icon; the others are just icons.
+class _PillDock extends StatelessWidget {
+  const _PillDock({
+    required this.tabs,
+    required this.selected,
+    required this.labels,
+    required this.centre,
+    required this.onSelect,
+  });
+
+  final List<String> tabs;
+  final String selected;
+  final bool labels;
+  final bool centre;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    final bottom = MediaQuery.viewPaddingOf(context).bottom;
+    final dense = tabs.length + (centre ? 1 : 0) > 4;
+    final half = (tabs.length + 1) ~/ 2;
+    Widget item(String t) => _PillItem(
+      meta: tabMeta[t]!,
+      selected: t == selected,
+      label: labels,
+      dense: dense,
+      onTap: () => onSelect(t),
+    );
+    return Semantics(
+      container: true,
+      label: 'Navigation',
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 12 + bottom),
+        child: Center(
+          heightFactor: 1,
+          child: Container(
+            height: 60,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: c.bgRaised.withValues(alpha: 0.96),
+              borderRadius: BorderRadius.circular(context.feel.r(18)),
+              border: Border.all(color: c.border.withValues(alpha: 0.7)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: c.isDark ? 0.24 : 0.08), blurRadius: 20, offset: const Offset(0, 8)),
+              ],
+            ),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < tabs.length; i++) ...[
+                    if (centre && i == half)
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: _ContinueButton(size: 44)),
+                    item(tabs[i]),
+                  ],
+                  if (centre && half >= tabs.length)
+                    const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: _ContinueButton(size: 44)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PillItem extends StatelessWidget {
+  const _PillItem({
+    required this.meta,
+    required this.selected,
+    required this.label,
+    required this.dense,
+    required this.onTap,
+  });
+
+  final TabMeta meta;
+  final bool selected;
+  final bool label;
+  final bool dense;
+  final VoidCallback onTap;
+
+  static const _d = Duration(milliseconds: 320);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sc;
+    final tint = selected ? c.accent : c.textTertiary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: meta.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Haptic.selection();
+          onTap();
+        },
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: dense ? 2 : 3),
+          child: AnimatedContainer(
+            duration: _d,
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(horizontal: dense ? (selected ? 13 : 11) : (selected ? 17 : 15)),
+            decoration: BoxDecoration(
+              color: c.accent.withValues(alpha: selected ? 0.16 : 0),
+              borderRadius: BorderRadius.circular(context.feel.r(14)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? meta.iconSelected : meta.icon, size: 21, color: tint),
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: _d,
+                    curve: Curves.easeOutCubic,
+                    child: selected && label
+                        ? Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: dense ? 72 : 88),
+                              child: Text(
+                                meta.label,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTheme.s(13, weight: FontWeight.w700, color: tint),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -432,8 +432,8 @@ class AppState extends ChangeNotifier {
 
   String? coverPath(String name) => store.pathOf('covers/$name');
 
-  Shelf addShelf(String name) {
-    final s = Shelf(id: newId(), name: name.trim());
+  Shelf addShelf(String name, {List<String> tags = const []}) {
+    final s = Shelf(id: newId(), name: name.trim(), tags: [...tags]);
     shelves.add(s);
     _markDirty(_library);
     notifyListeners();
@@ -443,6 +443,14 @@ class AppState extends ChangeNotifier {
   void renameShelf(String id, String name) {
     for (final s in shelves) {
       if (s.id == id) s.name = name.trim();
+    }
+    _markDirty(_library);
+    notifyListeners();
+  }
+
+  void setShelfTags(String id, List<String> tags) {
+    for (final s in shelves) {
+      if (s.id == id) s.tags = [...tags];
     }
     _markDirty(_library);
     notifyListeners();
@@ -472,6 +480,15 @@ class AppState extends ChangeNotifier {
         s.tags.removeAt(i);
       } else {
         s.tags[i] = t;
+      }
+    }
+    for (final sh in shelves) {
+      final i = sh.tags.indexOf(from);
+      if (i < 0) continue;
+      if (t.isEmpty || sh.tags.contains(t)) {
+        sh.tags.removeAt(i);
+      } else {
+        sh.tags[i] = t;
       }
     }
     _markDirty(_library);

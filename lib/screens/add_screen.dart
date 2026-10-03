@@ -9,7 +9,6 @@ import '../data/importer.dart';
 import '../data/io.dart';
 import '../data/languages.dart';
 import '../data/models.dart';
-import '../text/script.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -178,7 +177,6 @@ class _AddScreenState extends State<AddScreen> {
               'Put === on its own line between texts to add several at once.',
           maxLines: null,
           minLines: 7,
-          textDirection: isRtl('und', text) ? TextDirection.rtl : null,
           style: AppTheme.f(15, weight: FontWeight.w500, color: c.text, height: 1.5),
           onChanged: (_) => setState(() => _review = null),
         ),

@@ -303,6 +303,37 @@ void main() {
     });
   });
 
+  group('shelves and settings', () {
+    test('a shelf holds stories by hand or by tag, and follows renamed tags', () async {
+      final app = AppState(MemoryStore());
+      await app.load();
+      app.addStories(importText('A\nUn text.', plain: const PlainTextOptions(language: 'ca')).stories);
+      app.addStories(importText('B\nUn altre.', plain: const PlainTextOptions(language: 'ca')).stories);
+      final a = app.stories.firstWhere((s) => s.title == 'A');
+      final b = app.stories.firstWhere((s) => s.title == 'B');
+      a.tags.add('grammar');
+      final sh = app.addShelf('Study', tags: ['grammar']);
+      expect(app.stories.where(sh.holds), [a]);
+      app.toggleShelf(b, sh.id);
+      expect(app.stories.where(sh.holds).toSet(), {a, b});
+      app.renameTag('grammar', 'gramàtica');
+      expect(sh.tags, ['gramàtica']);
+      expect(sh.holds(a), isTrue);
+      final back = Shelf.fromJson(sh.toJson());
+      expect(back.tags, ['gramàtica']);
+    });
+
+    test('older settings move to the matte look once', () {
+      final old = Settings.fromJson({'transition': 'blur', 'glass': true, 'nav_style': 'floating'});
+      expect(old.transition, 'zoom');
+      expect(old.glass, isFalse);
+      expect(old.navStyle, 'pill');
+      final chosen = Settings.fromJson({...old.toJson(), 'transition': 'blur', 'nav_style': 'island'});
+      expect(chosen.transition, 'blur');
+      expect(chosen.navStyle, 'island');
+    });
+  });
+
   group('quiz', () {
     const json = '''
 {

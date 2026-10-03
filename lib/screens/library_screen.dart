@@ -27,7 +27,7 @@ class _Filters {
   static String? shelf;
   static String? tag;
 
-  static bool get picked => language != null || shelf != null || tag != null;
+  static bool get picked => language != null || tag != null;
   static bool get any => query.isNotEmpty || picked;
 
   static void clear() {
@@ -48,9 +48,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<Story> _visible(AppState app) {
     final s = app.settings;
     final q = _Filters.query.trim().toLowerCase();
+    final shelf = app.shelves.where((x) => x.id == _Filters.shelf).firstOrNull;
     final list = app.visibleStories.where((st) {
       if (_Filters.language != null && st.language != _Filters.language) return false;
-      if (_Filters.shelf != null && !st.shelves.contains(_Filters.shelf)) return false;
+      if (shelf != null && !shelf.holds(st)) return false;
       if (_Filters.tag != null && !st.tags.contains(_Filters.tag)) return false;
       if (s.libraryHideFinished && st.finishedAt != null) return false;
       if (q.isNotEmpty) {
@@ -85,10 +86,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       case 'shelf':
         final out = <(String, List<Story>)>[];
         for (final sh in app.shelves) {
-          final l = list.where((s) => s.shelves.contains(sh.id)).toList();
+          final l = list.where(sh.holds).toList();
           if (l.isNotEmpty) out.add((sh.name, l));
         }
-        final loose = list.where((s) => s.shelves.isEmpty).toList();
+        final loose = list.where((s) => !app.shelves.any((sh) => sh.holds(s))).toList();
         if (loose.isNotEmpty) out.add((out.isEmpty ? 'All stories' : 'Not on a shelf', loose));
         return out;
       default:
@@ -183,6 +184,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         ],
       ),
+      if (app.shelves.isNotEmpty || app.allTags.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _ShelfStrip(
+          selected: _Filters.shelf,
+          onSelect: (id) => setState(() => _Filters.shelf = id),
+        ),
+      ],
       if (_Filters.picked) ...[
         const SizedBox(height: 10),
         Wrap(
@@ -191,13 +199,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             if (_Filters.language != null)
               Pill(label: languageName(_Filters.language!), icon: PhosphorIconsBold.x, selected: true, onTap: () => setState(() => _Filters.language = null)),
-            if (_Filters.shelf != null)
-              Pill(
-                label: app.shelves.where((x) => x.id == _Filters.shelf).firstOrNull?.name ?? 'Shelf',
-                icon: PhosphorIconsBold.x,
-                selected: true,
-                onTap: () => setState(() => _Filters.shelf = null),
-              ),
             if (_Filters.tag != null)
               Pill(label: '#${_Filters.tag}', icon: PhosphorIconsBold.x, selected: true, onTap: () => setState(() => _Filters.tag = null)),
           ],
@@ -690,6 +691,83 @@ class _TitleRow extends StatelessWidget {
               done ? 'Done' : '${(story.progress * 100).round()}%',
               style: AppTheme.d(12.5, weight: FontWeight.w700, color: c.textTertiary),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shelves right under the search: tap one to see only its stories, hold
+/// it to edit, + to make one from your tags.
+class _ShelfStrip extends StatelessWidget {
+  const _ShelfStrip({required this.selected, required this.onSelect});
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app;
+    final c = context.sc;
+    final g = context.feel.gutter;
+    final shelves = app.shelves;
+    final stories = app.visibleStories;
+    Widget chip(String label, bool on, VoidCallback onTap, {VoidCallback? onHold, String? count, IconData? icon}) => Padding(
+      padding: const EdgeInsetsDirectional.only(end: 8),
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: count == null ? label : '$label, $count',
+        excludeSemantics: true,
+        child: Pressable(
+          scale: 0.95,
+          onTap: onTap,
+          onLongPress: onHold,
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: on ? c.ember : c.bgRaised,
+              borderRadius: BorderRadius.circular(context.feel.pill(36)),
+              border: Border.all(color: on ? c.ember : c.border.withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: on ? c.onEmber : c.textSecondary),
+                  const SizedBox(width: 6),
+                ],
+                Text(label, style: AppTheme.f(13, weight: FontWeight.w700, color: on ? c.onEmber : c.text)),
+                if (count != null) ...[
+                  const SizedBox(width: 6),
+                  Text(count, style: AppTheme.d(11.5, weight: FontWeight.w700, color: on ? c.onEmber.withValues(alpha: 0.7) : c.textTertiary)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return SizedBox(
+      height: 36,
+      // Bleeds to the screen edges so the row scrolls under the gutters.
+      child: OverflowBox(
+        maxWidth: MediaQuery.sizeOf(context).width,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: g),
+          children: [
+            chip('All', selected == null, () => onSelect(null), icon: PhosphorIconsBold.books),
+            for (final sh in shelves)
+              chip(
+                sh.name,
+                selected == sh.id,
+                () => onSelect(selected == sh.id ? null : sh.id),
+                onHold: () => editShelf(context, sh),
+                count: '${stories.where(sh.holds).length}',
+              ),
+            chip(shelves.isEmpty ? 'New shelf' : 'Shelf', false, () => editShelf(context), icon: PhosphorIconsBold.plus),
           ],
         ),
       ),

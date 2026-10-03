@@ -172,15 +172,12 @@ class _QuizScreenState extends State<_QuizView> {
                 }),
                 const SizedBox(height: 10),
               ],
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                child: _StoryText(
-                  key: ValueKey(_index),
-                  story: s,
-                  text: q.question,
-                  size: 24,
-                  weight: FontWeight.w700,
-                ),
+              _StoryText(
+                key: ValueKey(_index),
+                story: s,
+                text: q.question,
+                size: 24,
+                weight: FontWeight.w700,
               ),
               if (q.translation != null) ...[
                 const SizedBox(height: 10),

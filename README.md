@@ -65,7 +65,9 @@ the device until you export it.
   - Georgian: Noto Serif and Noto Sans Georgian. Other scripts use your
     phone's font, and you can import your own .ttf or .otf.
 - **Library.** Covers, shelves, list or titles, with sort, grouping,
-  favourites and filters in one options sheet. Covers are an image, one of
+  favourites and filters in one options sheet. **Shelves** sit under the
+  search bar: a shelf is a set of tags, so every story tagged `A1` or
+  `grammar` lands on it by itself; tap one to see only its stories. Covers are an image, one of
   twelve scenery illustrations or a pattern. Deleting a story can be undone.
 - **Add.** Two cards, **Generate** and **Import files**, above a box to
   paste or write. Several texts can go in one paste, separated by `===`.
@@ -97,7 +99,9 @@ the device until you export it.
   privacy mode shows only the language you're studying now.
 - **Make it yours.** App feels (Classic, Minimal, Compact, Airy); themes
   including Gruvbox, Catppuccin, Nord, Dracula, Owl and Owl night, and your
-  own; an accent colour; five dock styles; screen transitions; and fifteen
+  own; dots, a grid or a plain background in any feel; six dock styles (the
+  default is a matte pill whose current tab shows its name); zoom, fade,
+  slide or blur between screens and no motion inside them; and fifteen
   app icons, each one letter in a fitting face: aleph, bet, lamed and tav,
   Greek omega, Persian pe, Thai ko kai, Cyrillic de, eszett, É, a
   blackletter Q, Georgian ani, hiragana a, hangul han and Devanagari a. All

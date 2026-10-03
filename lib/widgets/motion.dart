@@ -26,6 +26,11 @@ class RiseScope extends InheritedWidget {
 /// (DESIGN.md §8.6). Digits get fixed-width cells so numbers don't jitter.
 class RollingText extends StatefulWidget {
   const RollingText(this.text, {super.key, required this.style, this.semanticsLabel});
+
+  /// Off: numbers change in place. Motion stays between screens, not
+  /// inside them.
+  static bool animate = false;
+
   final String text;
   final TextStyle style;
   final String? semanticsLabel;
@@ -51,7 +56,7 @@ class _RollingTextState extends State<RollingText> with SingleTickerProviderStat
     final now = DateTime.now();
     final fast = now.difference(_last).inMilliseconds < 180;
     _last = now;
-    if (fast || Motion.reduced(context)) {
+    if (!RollingText.animate || fast || Motion.reduced(context)) {
       _c.value = 1;
       return;
     }
@@ -155,7 +160,7 @@ class _RollInState extends State<RollIn> with SingleTickerProviderStateMixin {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_c.isAnimating || _c.value > 0) return;
-    if (Motion.reduced(context) || widget.value == 0 || !RiseScope.shouldPlay(context)) {
+    if (!RollingText.animate || Motion.reduced(context) || widget.value == 0 || !RiseScope.shouldPlay(context)) {
       _c.value = 1;
     } else {
       _c.forward();
