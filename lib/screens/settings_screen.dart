@@ -239,16 +239,17 @@ class ProfileScreen extends StatelessWidget {
   static String _transitionName(String t) => switch (t) {
     'fade' => 'Fade',
     'slide' => 'Slide',
-    'scale' => 'Zoom',
+    'scale' => 'Scale',
+    'blur' => 'Blur',
     'none' => 'None',
-    _ => 'Blur',
+    _ => 'Zoom',
   };
 
   static Future<void> _editProfile(BuildContext context) async {
     final app = context.appRead;
     final s = app.settings;
     final nameCtl = TextEditingController(text: s.profileName);
-    const emojis = ['', '📚', '🦉', '🌿', '☕', '🌙', '🦊', '🐢', '✍️', '🎧', '🧭', '🍵'];
+    final emojis = ['', ...profileIcons.keys];
     await showAppSheet<void>(
       context,
       (ctx) => StatefulBuilder(
@@ -292,7 +293,7 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         child: e.isEmpty
                             ? Text('Aa', style: AppTheme.f(14, weight: FontWeight.w800, color: c.textSecondary))
-                            : Text(e, style: const TextStyle(fontSize: 22)),
+                            : Icon(profileIcons[e], size: 22, color: c.text),
                       ),
                     ),
                 ],
@@ -642,6 +643,28 @@ class DataScreen extends StatelessWidget {
   }
 }
 
+/// Profile pictures: things from a study rather than animals. Stored by id
+/// in `profileEmoji`; anything else (older emoji picks) falls back to
+/// initials.
+const profileIcons = <String, IconData>{
+  'books': PhosphorIconsFill.books,
+  'cap': PhosphorIconsFill.graduationCap,
+  'scroll': PhosphorIconsFill.scroll,
+  'pen': PhosphorIconsFill.penNib,
+  'notebook': PhosphorIconsFill.notebook,
+  'globe': PhosphorIconsFill.globeHemisphereWest,
+  'compass': PhosphorIconsFill.compass,
+  'flask': PhosphorIconsFill.flask,
+  'atom': PhosphorIconsFill.atom,
+  'columns': PhosphorIconsFill.bank,
+  'lamp': PhosphorIconsFill.lamp,
+  'translate': PhosphorIconsFill.translate,
+  'chalkboard': PhosphorIconsFill.chalkboardTeacher,
+  'certificate': PhosphorIconsFill.certificate,
+  'brain': PhosphorIconsFill.brain,
+  'pi': PhosphorIconsFill.mathOperations,
+};
+
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.name, required this.emoji, required this.hue, required this.size});
   final String name;
@@ -658,8 +681,8 @@ class _Avatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: tone.paper, shape: BoxShape.circle),
-      child: emoji.isNotEmpty
-          ? Text(emoji, style: TextStyle(fontSize: size * 0.46))
+      child: profileIcons[emoji] != null
+          ? Icon(profileIcons[emoji], size: size * 0.46, color: tone.ink)
           : Text(initials.isEmpty ? '·' : initials, style: AppTheme.f(size * 0.36, weight: FontWeight.w800, color: tone.ink)),
     );
   }
@@ -754,6 +777,17 @@ class AppearanceScreen extends StatelessWidget {
                   if (f.id == 'classic' || f.id == 'airy') x.gridColumns = 2;
                 }),
               ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Kicker('Background'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in const {'none': 'Plain', 'dots': 'Dots', 'grid': 'Grid'}.entries)
+              Pill(label: e.value, selected: s.background == e.key, onTap: () => app.updateSettings((x) => x.background = e.key)),
           ],
         ),
         const SizedBox(height: 28),
@@ -1292,7 +1326,7 @@ class LayoutScreen extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final e in const {'blur': 'Blur', 'fade': 'Fade', 'slide': 'Slide', 'scale': 'Zoom', 'none': 'None'}.entries)
+            for (final e in const {'zoom': 'Zoom', 'blur': 'Blur', 'fade': 'Fade', 'slide': 'Slide', 'scale': 'Scale', 'none': 'None'}.entries)
               Pill(label: e.value, selected: s.transition == e.key, onTap: () => app.updateSettings((x) => x.transition = e.key)),
           ],
         ),
@@ -1335,6 +1369,7 @@ class _DockTile extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _names = {
+    'pill': 'Pill',
     'floating': 'Floating',
     'island': 'Island',
     'bubble': 'Bubble',
@@ -1350,7 +1385,21 @@ class _DockTile extends StatelessWidget {
       final col = on
           ? (style == 'bubble' ? c.onEmber : (style == 'line' ? c.accent : c.text))
           : c.textTertiary;
-      Widget icon = Container(width: 9, height: 9, decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(3)));
+      Widget icon = Container(width: 9, height: 9, decoration: BoxDecoration(color: on && style == 'pill' ? c.accent : col, borderRadius: BorderRadius.circular(3)));
+      if (on && style == 'pill') {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+          decoration: BoxDecoration(color: c.accent.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              const SizedBox(width: 4),
+              Container(width: 12, height: 3, decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(2))),
+            ],
+          ),
+        );
+      }
       if (on && style != 'line') {
         icon = Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
@@ -1375,11 +1424,12 @@ class _DockTile extends StatelessWidget {
 
     final bar = Container(
       height: 30,
-      width: style == 'island' ? 72 : double.infinity,
+      width: style == 'island' ? 72 : (style == 'pill' ? 92 : double.infinity),
       margin: docked ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: c.bgRaised2,
-        borderRadius: docked ? null : BorderRadius.circular(15),
+        borderRadius: docked ? null : BorderRadius.circular(style == 'pill' ? 10 : 15),
+        border: style == 'pill' ? Border.all(color: c.border) : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,

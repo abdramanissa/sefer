@@ -35,7 +35,7 @@ class _PatternPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..color = bg);
     if (pattern == 'grid') {
       final p = Paint()
-        ..color = ink.withValues(alpha: 0.35)
+        ..color = ink.withValues(alpha: 0.22)
         ..strokeWidth = 1;
       for (var x = grid; x < size.width; x += grid) {
         canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
@@ -44,7 +44,7 @@ class _PatternPainter extends CustomPainter {
         canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
       }
     } else {
-      final p = Paint()..color = ink.withValues(alpha: 0.5);
+      final p = Paint()..color = ink.withValues(alpha: 0.4);
       for (var x = grid / 2; x < size.width; x += grid) {
         for (var y = grid / 2; y < size.height; y += grid) {
           canvas.drawCircle(Offset(x, y), 1.1, p);

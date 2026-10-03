@@ -70,13 +70,24 @@ bool isRtlScript(Script s) => s == Script.hebrew || s == Script.arabic;
 String baseLanguage(String code) =>
     code.toLowerCase().split(RegExp('[-_]')).first;
 
-/// Direction for a text: the language code decides when it is known,
-/// otherwise the script of the sample text.
+/// Direction for a text. What the text is written in wins: Hebrew or Arabic
+/// script reads right to left even when the story was saved under another
+/// language code. Without a telling sample, the language code decides.
 bool isRtl(String languageCode, [String sample = '']) {
-  final lang = baseLanguage(languageCode);
-  if (rtlLanguages.contains(lang)) return true;
-  if (lang.isNotEmpty && lang != 'und' && lang != 'xx') return false;
-  return isRtlScript(dominantScript(sample));
+  final script = dominantScript(sample);
+  if (script != Script.other) return isRtlScript(script);
+  return rtlLanguages.contains(baseLanguage(languageCode));
+}
+
+/// Direction of the first strong character in [s], for fields that should
+/// follow what is typed into them. Null when there is none yet.
+bool? firstStrongRtl(String s) {
+  for (final r in s.runes) {
+    final sc = scriptOfRune(r);
+    if (sc == Script.other) continue;
+    return isRtlScript(sc);
+  }
+  return null;
 }
 
 /// Scripts that are not Latin, where a transliteration line helps.

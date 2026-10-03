@@ -95,10 +95,12 @@ class _SeferAppState extends State<SeferApp> with WidgetsBindingObserver {
         final s = app.settings;
         Haptic.enabled = s.haptics;
         Motion.forceReduce = s.reduceMotion;
+        Motion.glass = s.glass;
         final platform = View.of(context).platformDispatcher.platformBrightness;
         return MaterialApp(
           title: 'Sefer',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const _CalmScroll(),
           theme: _themeFor(app, platform),
           themeAnimationDuration: const Duration(milliseconds: 380),
           themeAnimationCurve: Curves.easeOutCubic,
@@ -137,4 +139,16 @@ class _ScaledTextScaler extends TextScaler {
 
   @override
   int get hashCode => Object.hash(base, factor);
+}
+
+/// Scrolling stops at the edges without Android's stretch or glow, so lists
+/// never warp under your finger. Cheaper to draw too.
+class _CalmScroll extends MaterialScrollBehavior {
+  const _CalmScroll();
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) => const ClampingScrollPhysics();
 }

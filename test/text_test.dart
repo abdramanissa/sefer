@@ -113,6 +113,12 @@ void main() {
       expect(isRtl('el'), isFalse);
       expect(isRtl('und', 'שלום'), isTrue);
       expect(isRtl('und', 'hello'), isFalse);
+      // The script wins over a wrong language code.
+      expect(isRtl('en', 'שָׁלוֹם עוֹלָם'), isTrue);
+      expect(isRtl('he', 'Shalom'), isFalse);
+      expect(firstStrongRtl('123 שלום hello'), isTrue);
+      expect(firstStrongRtl('hello שלום'), isFalse);
+      expect(firstStrongRtl('42.'), isNull);
     });
 
     test('dominant script', () {

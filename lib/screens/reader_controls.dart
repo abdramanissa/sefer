@@ -72,10 +72,16 @@ class _Quick extends StatelessWidget {
           children: [
             _SizeButton(small: true, onTap: s.fontSize > 14 ? () => _set(context, (x) => x.fontSize = (x.fontSize - 1).clamp(14, 44)) : null),
             Expanded(
-              child: Text(
-                '${s.fontSize.round()}',
-                textAlign: TextAlign.center,
-                style: AppTheme.f(18, weight: FontWeight.w800, color: c.text),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Text size', style: AppTheme.f(10.5, weight: FontWeight.w700, color: c.textTertiary)),
+                  Text(
+                    '${s.fontSize.round()}',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.f(18, weight: FontWeight.w800, color: c.text, height: 1.15),
+                  ),
+                ],
               ),
             ),
             _SizeButton(small: false, onTap: s.fontSize < 44 ? () => _set(context, (x) => x.fontSize = (x.fontSize + 1).clamp(14, 44)) : null),
@@ -130,13 +136,25 @@ class _SizeButton extends StatelessWidget {
         scale: 0.9,
         onTap: onTap,
         child: Container(
-          width: 46,
+          width: 52,
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(context.feel.r(14))),
-          child: Text(
-            'A',
-            style: TextStyle(fontFamily: 'Literata', fontSize: small ? 14 : 21, fontWeight: FontWeight.w700, color: onTap == null ? c.textTertiary : c.text),
+          // A small A with a minus, a big A with a plus: smaller and larger
+          // text, readable at a glance.
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'A',
+                style: TextStyle(fontFamily: 'Literata', fontSize: small ? 14 : 21, fontWeight: FontWeight.w700, color: onTap == null ? c.textTertiary : c.text, height: 1.1),
+              ),
+              Padding(
+                padding: EdgeInsets.only(bottom: small ? 8 : 13),
+                child: Icon(small ? PhosphorIconsBold.minus : PhosphorIconsBold.plus, size: small ? 9 : 11, color: onTap == null ? c.textTertiary : c.textSecondary),
+              ),
+            ],
           ),
         ),
       ),
@@ -487,6 +505,15 @@ class _ReaderSettingsTabsState extends State<ReaderSettingsTabs> {
       color: c.bgRaised2,
       radius: 18,
       children: [
+        _SegRow(
+          label: 'Story title',
+          value: s.readerTitle,
+          options: const {'large': 'Large', 'small': 'Compact', 'bar': 'Top bar'},
+          onChanged: (v) => _set(context, (x) {
+            x.readerTitle = v;
+            x.showReaderHeader = true;
+          }),
+        ),
         _SegRow(
           label: 'Highlights',
           value: s.highlightStyle,

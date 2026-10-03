@@ -107,6 +107,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   final _position = ValueNotifier(0);
   final _picked = ValueNotifier<_Picked?>(null);
 
+  /// The end of the text is on screen: the finish bar shows.
+  final _atEnd = ValueNotifier(false);
+  final _endKey = GlobalKey();
+  bool _endCheckQueued = false;
+
   late int _anchor;
   Timer? _tick;
   int _pending = 0;
@@ -153,6 +158,7 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
 
   void _initialJump() {
     if (!_scroll.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkEnd());
     final top = MediaQuery.viewPaddingOf(context).top + _barHeight;
     if (_anchor == 0) {
       _scroll.jumpTo(_scroll.position.minScrollExtent);
@@ -204,14 +210,34 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     _progress.dispose();
     _position.dispose();
     _picked.dispose();
+    _atEnd.dispose();
     _pager?.dispose();
     _page.dispose();
     _pageCount.dispose();
     super.dispose();
   }
 
+  /// Whether the spot right after the last paragraph is on screen.
+  void _checkEnd() {
+    if (!mounted) return;
+    final box = _endKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) {
+      _atEnd.value = false;
+      return;
+    }
+    _atEnd.value = box.localToGlobal(Offset.zero).dy < MediaQuery.sizeOf(context).height - 40;
+  }
+
   bool _onScroll(ScrollNotification n) {
     _touch();
+    // Notifications can arrive mid-layout; measure once the frame is done.
+    if (!_endCheckQueued) {
+      _endCheckQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _endCheckQueued = false;
+        _checkEnd();
+      });
+    }
     if (n is ScrollUpdateNotification && n.dragDetails != null && _app!.settings.hideChromeOnScroll) {
       final d = n.scrollDelta ?? 0;
       if (d > 6) _chrome.value = false;
@@ -313,8 +339,8 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     if (i >= _pages.length) return;
     final n = s.paragraphs.length;
     final page = _pages[i];
-    final contentPages = _pages.where((p) => !p.footer).length;
-    final atEnd = page.footer || i >= contentPages - 1;
+    final atEnd = i >= _pages.length - 1;
+    _atEnd.value = atEnd;
     final first = page.chunks.isEmpty ? n : page.chunks.first.p;
     final progress = atEnd ? 1.0 : first / max(1, n);
     _position.value = min(first, max(0, n - 1));
@@ -326,7 +352,8 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final scaler = MediaQuery.textScalerOf(context);
     final topPad = top + _barHeight + 18;
-    final bottomPad = bottom + 44;
+    // Room for the page number, or the finish bar on the last page.
+    final bottomPad = bottom + 84;
     return LayoutBuilder(
       builder: (context, box) {
         final avail = box.maxHeight - topPad - bottomPad;
@@ -334,16 +361,19 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
           width, avail, scaler.scale(100), s.updatedAt, set.fontSize, set.lineHeight, set.wordSpacing, //
           set.letterSpacing, set.paragraphSpacing, set.sidePadding, set.readerFont, set.fontByLanguage[s.language],
           set.translit, set.showMarks, set.boldText, set.paragraphIndent, set.sentenceTranslations,
-          set.showReaderHeader, _openTranslations.join(','),
+          set.readerHeaderShown, set.readerTitle, _openTranslations.join(','),
         ]);
         if (key != _pagesKey) {
           final keep = _pages.isEmpty ? _anchor : _position.value;
           _pages = _paginate(s, set, dir, width - set.sidePadding * 2, avail, scaler);
           _pagesKey = key;
           final target = _pageOf(keep);
-          final count = _pages.where((p) => !p.footer).length;
+          final count = _pages.length;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _pageCount.value = count;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _atEnd.value = (_pager?.hasClients ?? false ? _pager!.page!.round() : target) >= _pages.length - 1;
           });
           if (_pager == null) {
             _pager = PageController(initialPage: target);
@@ -366,15 +396,6 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
             onPageChanged: (i) => _onPage(s, i),
             itemBuilder: (context, i) {
               final page = _pages[i];
-              if (page.footer) {
-                return SingleChildScrollView(
-                  padding: EdgeInsets.only(top: topPad),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: avail),
-                    child: Center(child: _Footer(story: s, width: width)),
-                  ),
-                );
-              }
               return RepaintBoundary(
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
@@ -414,7 +435,7 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     _setAwake(set.keepAwake);
     final paper = ReaderPaper.byId(set.readerPaper);
     final bg = paper.bg ?? c.bg;
-    final dir = isRtl(s.language, s.paragraphs.isEmpty ? s.title : s.paragraphs.first.text)
+    final dir = isRtl(s.language, [s.title, for (final p in s.paragraphs.take(3)) p.text].join(' '))
         ? TextDirection.rtl
         : TextDirection.ltr;
     final top = MediaQuery.viewPaddingOf(context).top;
@@ -445,11 +466,8 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
         child = ValueListenableBuilder<int>(
           valueListenable: _position,
           child: child,
-          builder: (_, pos, child) => AnimatedOpacity(
-            opacity: i < pos ? 0.4 : 1,
-            duration: const Duration(milliseconds: 240),
-            child: child,
-          ),
+          // Plain opacity: no fade animation per paragraph while scrolling.
+          builder: (_, pos, child) => Opacity(opacity: i < pos ? 0.4 : 1, child: child),
         );
       }
       return Center(
@@ -522,7 +540,8 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                         key: _centerKey,
                         delegate: SliverChildBuilderDelegate((_, i) => para(_anchor + i), childCount: n - _anchor),
                       ),
-                      SliverToBoxAdapter(child: _Footer(story: s, width: width)),
+                      // Clear of the finish bar.
+                      SliverToBoxAdapter(child: SizedBox(key: _endKey, height: 96 + MediaQuery.viewPaddingOf(context).bottom)),
                     ],
                   ),
                 ),
@@ -550,15 +569,31 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                 bottom: MediaQuery.viewPaddingOf(context).bottom + 14,
                 child: IgnorePointer(
                   child: ListenableBuilder(
-                    listenable: Listenable.merge([_page, _pageCount]),
+                    listenable: Listenable.merge([_page, _pageCount, _atEnd]),
                     builder: (_, _) => Text(
-                      _pageCount.value == 0 || _page.value >= _pageCount.value ? '' : '${_page.value + 1} / ${_pageCount.value}',
+                      _atEnd.value || _pageCount.value == 0 || _page.value >= _pageCount.value ? '' : '${_page.value + 1} / ${_pageCount.value}',
                       textAlign: TextAlign.center,
                       style: AppTheme.d(12, weight: FontWeight.w700, color: paper.soft ?? c.textTertiary),
                     ),
                   ),
                 ),
               ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _atEnd,
+                builder: (_, end, _) => IgnorePointer(
+                  ignoring: !end,
+                  child: AnimatedOpacity(
+                    opacity: end ? 1 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: _EndBar(story: s, width: width),
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               left: 0,
               right: 0,
@@ -610,10 +645,9 @@ class _Chunk {
 }
 
 class _Page {
-  _Page(this.chunks, {this.header = false, this.footer = false});
+  _Page(this.chunks, {this.header = false});
   final List<_Chunk> chunks;
   final bool header;
-  final bool footer;
 }
 
 /// Splits a story into pages that fit [height]. Paragraphs are split at
@@ -654,16 +688,20 @@ List<_Page> _paginate(Story s, Settings set, TextDirection dir, double width, do
   }
 
   var header = 0.0;
-  if (set.showReaderHeader) {
-    header = 17 + 12 + measure(s.title, styleFor(false).copyWith(fontSize: set.fontSize * 1.45, height: 1.25)) + set.paragraphSpacing + 10;
-    if (s.author.isNotEmpty) header += 26;
+  if (set.readerHeaderShown) {
+    final small = set.readerTitle == 'small';
+    header = (small ? 0 : 17 + 12) +
+        measure(s.title, styleFor(false).copyWith(fontSize: set.fontSize * (small ? 1.1 : 1.45), height: 1.25)) +
+        set.paragraphSpacing +
+        (small ? 0 : 10);
+    if (s.author.isNotEmpty && !small) header += 26;
   }
 
   final pages = <_Page>[];
   var chunks = <_Chunk>[];
   var used = header;
   void flush() {
-    pages.add(_Page(chunks, header: pages.isEmpty && set.showReaderHeader));
+    pages.add(_Page(chunks, header: pages.isEmpty && set.readerHeaderShown));
     chunks = [];
     used = 0;
   }
@@ -699,7 +737,6 @@ List<_Page> _paginate(Story s, Settings set, TextDirection dir, double width, do
   }
   if (chunks.isNotEmpty || pages.isEmpty) flush();
   painter.dispose();
-  pages.add(_Page(const [], footer: true));
   return pages;
 }
 
@@ -809,17 +846,18 @@ class _Header extends StatelessWidget {
     final font = readerFontFor(set.fontByLanguage, set.readerFont, story.language);
     final ink = paper.ink ?? c.text;
     final soft = paper.soft ?? c.textTertiary;
-    if (!set.showReaderHeader) return SizedBox(height: topPad);
+    if (!set.readerHeaderShown) return SizedBox(height: topPad);
     final ws = app.wordStats(story);
+    final small = set.readerTitle == 'small';
     return Center(
       child: SizedBox(
         width: width,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(set.sidePadding, topPad, set.sidePadding, set.paragraphSpacing + 10),
+          padding: EdgeInsets.fromLTRB(set.sidePadding, topPad, set.sidePadding, set.paragraphSpacing + (small ? 0 : 10)),
           child: Column(
             crossAxisAlignment: dir == TextDirection.rtl ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Text(
+              if (!small) Text(
                 [
                   '${story.wordCount} words',
                   '~${app.minutesLeft(story)} min',
@@ -828,13 +866,13 @@ class _Header extends StatelessWidget {
                 ].join(' · '),
                 style: AppTheme.f(12, weight: FontWeight.w600, color: soft),
               ),
-              const SizedBox(height: 12),
+              if (!small) const SizedBox(height: 12),
               Text(
                 set.showMarks ? story.title : stripVowelMarks(story.title),
                 textDirection: dir,
-                style: _readerStyle(set, font, ink).copyWith(fontSize: set.fontSize * 1.45, fontWeight: FontWeight.w700, height: 1.25),
+                style: _readerStyle(set, font, ink).copyWith(fontSize: set.fontSize * (small ? 1.1 : 1.45), fontWeight: FontWeight.w700, height: 1.25),
               ),
-              if (story.author.isNotEmpty) ...[
+              if (story.author.isNotEmpty && !small) ...[
                 const SizedBox(height: 6),
                 Text(story.author, style: AppTheme.f(14, weight: FontWeight.w600, color: soft)),
               ],
@@ -846,10 +884,11 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// The end of a story: a slim line with how much you knew, a round check
-/// to finish, and small links to the quiz and the next story.
-class _Footer extends StatelessWidget {
-  const _Footer({required this.story, required this.width});
+/// The end of a story, pinned to the bottom of the screen once the last
+/// lines are in view: how much you knew, a check to finish, and small
+/// buttons for the quiz and the next story. It never sits inside the text.
+class _EndBar extends StatelessWidget {
+  const _EndBar({required this.story, required this.width});
   final Story story;
   final double width;
 
@@ -862,7 +901,6 @@ class _Footer extends StatelessWidget {
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
     final done = story.finishedAt != null;
     final next = app.nextAfter(story);
-    final soft = c.textSecondary;
 
     void finish() {
       final marked = app.finishStory(story);
@@ -877,80 +915,89 @@ class _Footer extends StatelessWidget {
       );
     }
 
-    return Center(
-      child: SizedBox(
-        width: width,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(set.sidePadding, 8, set.sidePadding, 48 + bottom),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    Widget small(IconData icon, String label, VoidCallback onTap) => Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Pressable(
+        scale: 0.9,
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: c.bgRaised2, borderRadius: BorderRadius.circular(18)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Divider(color: c.border.withValues(alpha: 0.6), height: 1),
-              const SizedBox(height: 14),
-              Row(
+              Icon(icon, size: 15, color: c.text),
+              const SizedBox(width: 6),
+              Text(label, style: AppTheme.f(12.5, weight: FontWeight.w700, color: c.text)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Center(
+      child: Container(
+        width: min(width, MediaQuery.sizeOf(context).width) - 24,
+        margin: EdgeInsets.only(bottom: 12 + bottom),
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: c.bgRaised,
+          borderRadius: BorderRadius.circular(context.feel.r(22)),
+          border: Border.all(color: c.border.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(done ? 'Finished' : 'The end', style: AppTheme.f(15, weight: FontWeight.w800, color: c.text)),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${(ws.knownRatio * 100).round()}% known · ${ws.learning} learning · ${ws.fresh} new',
-                          style: AppTheme.f(12, weight: FontWeight.w600, color: soft),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Semantics(
-                    button: true,
-                    label: done
-                        ? 'Read again'
-                        : (set.autoKnownOnFinish && ws.fresh > 0 ? 'Finish. ${ws.fresh} new words become known' : 'Finish'),
-                    excludeSemantics: true,
-                    child: Pressable(
-                      scale: 0.9,
-                      onTap: done ? () => app.resetProgress(story) : finish,
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: done ? c.bgRaised2 : c.ember),
-                        child: Icon(
-                          done ? PhosphorIconsBold.arrowCounterClockwise : PhosphorIconsBold.check,
-                          size: 20,
-                          color: done ? c.text : c.onEmber,
-                        ),
-                      ),
-                    ),
+                  Text(done ? 'Finished' : 'The end', style: AppTheme.f(13.5, weight: FontWeight.w800, color: c.text)),
+                  Text(
+                    '${(ws.knownRatio * 100).round()}% known · ${ws.fresh} new',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.f(11.5, weight: FontWeight.w600, color: c.textSecondary),
                   ),
                 ],
               ),
-              if (story.quiz.isNotEmpty || next != null) ...[
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (story.quiz.isNotEmpty)
-                      Pill(
-                        icon: PhosphorIconsBold.exam,
-                        label: story.quizBest == null ? 'Quiz · ${story.quiz.length}' : 'Quiz · best ${story.quizBest}%',
-                        onTap: () => app.go('quiz:${story.id}'),
-                      ),
-                    if (next != null)
-                      Pill(
-                        icon: PhosphorIconsBold.arrowRight,
-                        label: next.title.length > 24 ? 'Next: ${next.title.substring(0, 22)}…' : 'Next: ${next.title}',
-                        onTap: () {
-                          app.back();
-                          app.openStory(next);
-                        },
-                      ),
-                  ],
-                ),
-              ],
+            ),
+            if (story.quiz.isNotEmpty) ...[
+              small(PhosphorIconsBold.exam, 'Quiz', () => app.go('quiz:${story.id}')),
+              const SizedBox(width: 6),
             ],
-          ),
+            if (next != null) ...[
+              small(PhosphorIconsBold.arrowRight, 'Next', () {
+                app.back();
+                app.openStory(next);
+              }),
+              const SizedBox(width: 6),
+            ],
+            Semantics(
+              button: true,
+              label: done
+                  ? 'Read again'
+                  : (set.autoKnownOnFinish && ws.fresh > 0 ? 'Finish. ${ws.fresh} new words become known' : 'Finish'),
+              excludeSemantics: true,
+              child: Pressable(
+                scale: 0.9,
+                onTap: done ? () => app.resetProgress(story) : finish,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: done ? c.bgRaised2 : c.ember),
+                  child: Icon(
+                    done ? PhosphorIconsBold.arrowCounterClockwise : PhosphorIconsBold.check,
+                    size: 18,
+                    color: done ? c.text : c.onEmber,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

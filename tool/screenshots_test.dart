@@ -134,6 +134,9 @@ Future<AppState> _seed() async {
   app.setWord('ca', 'àvia', status: 4, meaning: 'grandmother');
   app.setWord('ca', 'cafè', status: WordStatus.known);
   app.settings.learning = ['el', 'ca'];
+  app.addShelf('Beginner', tags: ['A1']);
+  app.addShelf('Next step', tags: ['A2']);
+  app.settings.profileEmoji = 'cap';
   app.settings.profileName = 'Issa';
   final r = Random(4);
   final now = DateTime.now();
@@ -259,6 +262,19 @@ void main() {
       await t.pumpAndSettle();
     });
   });
+
+  for (final layout in ['scroll', 'pages']) {
+    testWidgets('reader rtl $layout', (t) async {
+      final app = await _seed();
+      app.settings.readerLayout = layout;
+      const he = 'הַבַּיִת שֶׁל סָבְתָא\nסָבְתָא שֶׁלִּי גָּרָה בְּבַיִת קָטָן לְיַד הַיָּם. כָּל בֹּקֶר הִיא שׁוֹתָה קָפֶה וּמִסְתַּכֶּלֶת עַל הַגַּלִּים.\n\nבַּצָּהֳרַיִם הִיא הוֹלֶכֶת לַשּׁוּק וְקוֹנָה לֶחֶם, גְּבִינָה וּפֵרוֹת.';
+      app.addStories(importText(he, plain: const PlainTextOptions(language: 'he')).stories);
+      await shot(t, app, 'reader_rtl_$layout', then: () async {
+        app.openStory(app.stories.firstWhere((s) => s.language == 'he'));
+        await t.pumpAndSettle();
+      });
+    });
+  }
 
   testWidgets('reader pages', (t) async {
     final app = await _seed();

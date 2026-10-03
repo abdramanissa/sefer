@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../text/script.dart';
 import '../theme/feel.dart';
 
 // ------------------------------------------------------------------ helpers
@@ -24,6 +25,9 @@ class Haptic {
 class Motion {
   Motion._();
   static bool forceReduce = false;
+
+  /// Frosted glass behind sheets and bars; off gives plain, matte scrims.
+  static bool glass = false;
   static bool reduced(BuildContext context) =>
       forceReduce || (MediaQuery.maybeDisableAnimationsOf(context) ?? false);
 }
@@ -93,7 +97,7 @@ class _PressableState extends State<Pressable> {
       child: AnimatedScale(
         scale: _down ? widget.scale : 1,
         duration: Duration(milliseconds: _down ? 90 : 260),
-        curve: _down ? Curves.easeOut : Curves.easeOutBack,
+        curve: Curves.easeOutCubic,
         child: widget.child,
       ),
     );
@@ -825,14 +829,22 @@ class AppField extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                // Follows what is typed: Hebrew or Arabic flips the field to
+                // right-to-left without picking a language first.
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) => TextField(
                   controller: controller,
                   maxLines: obscure ? 1 : maxLines,
                   minLines: minLines,
                   autofocus: autofocus,
                   onChanged: onChanged,
                   keyboardType: keyboardType,
-                  textDirection: textDirection,
+                  textDirection: textDirection ?? switch (firstStrongRtl(value.text)) {
+                    true => TextDirection.rtl,
+                    false => TextDirection.ltr,
+                    null => null,
+                  },
                   obscureText: obscure,
                   autocorrect: !obscure,
                   enableSuggestions: !obscure,
@@ -843,6 +855,7 @@ class AppField extends StatelessWidget {
                     hintText: hint,
                     hintStyle: AppTheme.f(14.5, weight: FontWeight.w500, color: c.textTertiary),
                   ),
+                ),
                 ),
               ),
               ?trailing,
@@ -1091,11 +1104,11 @@ class _BlurBarrier extends StatelessWidget {
     animation: animation,
     builder: (context, _) {
       final t = Curves.easeOut.transform(animation.value);
-      final scrimBox = ColoredBox(color: Colors.black.withValues(alpha: scrim * t));
+      final scrimBox = ColoredBox(color: Colors.black.withValues(alpha: (Motion.glass ? scrim : scrim + 0.18) * t));
       return GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: t < 0.3 || Motion.reduced(context)
+        child: t < 0.3 || Motion.reduced(context) || !Motion.glass
             ? scrimBox
             : BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: kSheetBlur * t, sigmaY: kSheetBlur * t),

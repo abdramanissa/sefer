@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Frosted surface (DESIGN.md §5.2): blur, a tint, a top-lit sheen and a
-/// hairline rim.
+/// Frosted surface: blur under a flat tint and a hairline rim. No sheen; the
+/// app aims for a matte finish.
 class GlassSurface extends StatelessWidget {
   const GlassSurface({
     super.key,
@@ -57,17 +57,8 @@ class GlassSurface extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: r,
-              color: c.bgRaised.withValues(alpha: dark ? 0.66 : 0.74),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0, 0.6],
-                colors: [
-                  Colors.white.withValues(alpha: dark ? 0.07 : 0.30),
-                  Colors.white.withValues(alpha: 0),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: dark ? 0.08 : 0.5), width: 0.8),
+              color: c.bgRaised.withValues(alpha: dark ? 0.72 : 0.80),
+              border: Border.all(color: c.border.withValues(alpha: 0.6), width: 0.8),
             ),
             child: child,
           ),
